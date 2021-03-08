@@ -1,3 +1,8 @@
 /clean_data
 /raw_data
 /outputs
+.Rproj.user
+.Rhistory
+.DS_Store
+Instructions.html
+code/.Rhistory
