@@ -6,10 +6,14 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
+require("knitr")
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir=normalizePath("..")) #set working directory to the project directory
 ```
 
 ```{r}
+rm(list=ls())
+gc()
 library(tidyverse)
 library(lubridate)
 library(ggplot2)
@@ -31,14 +35,8 @@ compute_dpt2 <- function(tib,dtmax=3){
   return(tib)
 }
 
-compute_dpt2_dtFreeze <- function(tib,dtmax=3){
-  tib <- tib %>% mutate(dpt2 = dp*pmin(dt,3),dtFreeze = (Temp<=32)*pmin(dt,3),Tdt = Temp*pmin(dt,3),lost_dt = dt-pmin(dt,3))
-  return(tib)
-}
-
 compute_dp_stuff <- function(tib,dtmax = 3){
-  #tib <- tib %>% drop_na(WS) %>% compute_durations() %>% compute_dpt() %>% compute_dpt2(dtmax)
-  tib <- tib %>% drop_na(WS) %>% compute_durations() %>% compute_dpt() %>% compute_dpt2_dtFreeze(dtmax)
+  tib <- tib %>% drop_na(WS) %>% compute_durations() %>% compute_dpt() %>% compute_dpt2(dtmax)
   return(tib)
 }
 
@@ -47,73 +45,9 @@ drop_yrs <- function(tib,yrs){
   return(tib)
 }
 
-
-compute_by_yr_stuff <- function(tib){
-  tib <- tib %>% select(datetime,dt,dp,WD,dpt,dpt2,lost_dt) %>% mutate(yr = year(datetime)) %>%
-    group_by(yr) %>%
-    summarize(dp_m = mean(dp,na.rm=TRUE),dt_m=mean(dt,na.rm=TRUE),dt_sd=sd(dt,na.rm=TRUE),
-              dpt_su=sum(dpt,na.rm=TRUE),dpt2_su=sum(dpt2,na.rm=TRUE),lost_dt_su=sum(lost_dt,na.rm=TRUE),
-              nobs=n())
-  return(tib)
-}
-
-compute_storm_yrs <- function(tib,startdate=as.Date('1948-07-01')){
-  tz(startdate) <- 'EST'
-  startyr <- year(startdate) 
-  sda <- floor(as.duration(startdate %--% tib$datetime)/ddays(1)) + 1 #JD starting count on startdata
-  sdays <- c(0,cumsum(((startyr:(startyr+100)) %% 4 == 0) + 365)) + 1 #starting date of year for 102 years
-  syr <- findInterval(sda,sdays)
-  sday <- sda[syr>0] - sdays[syr[syr>0]]+1
-  
-  storm_day <- rep(NA,length(sda))
-  storm_year <- storm_day
-  storm_day[syr>0] <- sday
-  storm_year[syr>0] <- syr[syr>0]
-  
-  tib$storm_year <- storm_year
-  tib$storm_day <- storm_day
-  
-  return(tib)
-}
-
-
 compute_by_yr_stuff_directional <- function(tib){
   tib <- tib %>% select(datetime,dt,dp,WD,dpt,dpt2,lost_dt) %>% mutate(yr = year(datetime)) %>%
     group_by(yr) %>% 
-    summarize(dp_m = mean(dp,na.rm=TRUE),dt_m=mean(dt,na.rm=TRUE),dt_sd=sd(dt,na.rm=TRUE),
-              dpt_su=sum(dpt,na.rm=TRUE),dpt2_su=sum(dpt2,na.rm=TRUE),lost_dt_su=sum(lost_dt,na.rm=TRUE),
-              dp_n = sum(dpt2*(WD>=0)*(WD<11.25)+dpt2*(WD>=348.75)*(WD<=360),na.rm=TRUE),
-              dp_nne = sum(dpt2*(WD>=11.25)*(WD<33.75),na.rm=TRUE),
-              dp_ne = sum(dpt2*(WD>=33.75)*(WD<56.25),na.rm=TRUE),
-              dp_ene = sum(dpt2*(WD>=56.25)*(WD<78.75),na.rm=TRUE),
-              dp_e = sum(dpt2*(WD>=78.75)*(WD<101.25),na.rm=TRUE),
-              dp_ese = sum(dpt2*(WD>=101.25)*(WD<123.75),na.rm=TRUE),
-              dp_se = sum(dpt2*(WD>=123.75)*(WD<146.25),na.rm=TRUE),
-              dp_sse = sum(dpt2*(WD>=146.25)*(WD<168.75),na.rm=TRUE),
-              dp_s = sum(dpt2*(WD>=168.75)*(WD<191.25),na.rm=TRUE),
-              dp_ssw = sum(dpt2*(WD>=191.25)*(WD<213.75),na.rm=TRUE),
-              dp_sw = sum(dpt2*(WD>=213.75)*(WD<236.25),na.rm=TRUE),
-              dp_wsw = sum(dpt2*(WD>=236.25)*(WD<258.75),na.rm=TRUE),
-              dp_w = sum(dpt2*(WD>=258.75)*(WD<281.25),na.rm=TRUE),
-              dp_wnw = sum(dpt2*(WD>=281.25)*(WD<303.75),na.rm=TRUE),
-              dp_nw = sum(dpt2*(WD>=303.75)*(WD<326.25),na.rm=TRUE),
-              dp_nnw = sum(dpt2*(WD>=326.25)*(WD<348.75),na.rm=TRUE),
-              dp_sc = sum(dpt2*(WD>=0)*(WD<=45)+dpt2*(WD>=315)*(WD<=360),na.rm=TRUE),
-              dp_swc = sum(dpt2*(WD>=0)*(WD<=90)+dpt2*(WD==360),na.rm=TRUE),
-              dp_wc = sum(dpt2*(WD>=45)*(WD<=135),na.rm=TRUE),
-              dp_nwc = sum(dpt2*(WD>=90)*(WD<=180),na.rm=TRUE),
-              dp_nc = sum(dpt2*(WD>=135)*(WD<=225),na.rm=TRUE),
-              dp_nec = sum(dpt2*(WD>=180)*(WD<=270),na.rm=TRUE),
-              dp_ec = sum(dpt2*(WD>=225)*(WD<=315),na.rm=TRUE),
-              dp_sec = sum(dpt2*(WD>=270)*(WD<=360)+dpt2*(WD==0),na.rm=TRUE),
-              nobs=n())
-  return(tib)
-}
-
-
-compute_by_stormyr_stuff_directional <- function(tib){
-  tib <- tib %>% select(datetime,dt,dp,WD,dpt,dpt2,lost_dt,storm_day,storm_year) %>%
-    group_by(storm_year) %>% 
     summarize(dp_m = mean(dp,na.rm=TRUE),dt_m=mean(dt,na.rm=TRUE),dt_sd=sd(dt,na.rm=TRUE),
               dpt_su=sum(dpt,na.rm=TRUE),dpt2_su=sum(dpt2,na.rm=TRUE),lost_dt_su=sum(lost_dt,na.rm=TRUE),
               dp_n = sum(dpt2*(WD>=0)*(WD<11.25)+dpt2*(WD>=348.75)*(WD<=360),na.rm=TRUE),
@@ -157,26 +91,6 @@ group_by_yrs <- function(tib,breaks){
   return(tib)
 }
 
-group_by_sy_sds <- function(tib,breaks){
-  #tib <- tib %>% group_by(pd=cut(storm_day,breaks=breaks,right=FALSE),storm_year) %>%
-    #summarize_at(vars(dpt2:lost_dt),sum,na.rm=TRUE)
-  tib <- tib %>% group_by(pd=cut(storm_day,breaks=breaks,right=FALSE),storm_year) %>%
-    summarize_at(vars(dt:lost_dt),sum,na.rm=TRUE) %>% mutate(propFrozen = dtFreeze/(dt-lost_dt),meanT = Tdt/(dt-lost_dt))
-  return(tib)
-}
-
-drop_big_lost_dt_yrs_s<- function(tib,dtmax=175,yrlims){
-  by_yr<-summarize(group_by(tib,storm_year),lost_dt_su=sum(lost_dt))
-  good_yr <- by_yr$storm_year[by_yr$lost_dt_su <= dtmax]
-  #print(good_yr)
-  good_yr <- good_yr[!is.na(good_yr)]
-  good_yr <- good_yr[good_yr>=yrlims[1]]
-  good_yr <- good_yr[good_yr<=yrlims[2]]
-  tib <- tib[tib$storm_year %in% good_yr,] %>% select(pd,storm_year,dpt2,propFrozen,meanT)
-  return(tib)
-}
-
-
 dp_plot <- function(dp,yscale=30){
   dir <- seq(0,360-22.5,by=22.5)
   ndp <- dp*cos(dir*pi/180) #north components of dp
@@ -196,7 +110,7 @@ dp_plot <- function(dp,yscale=30){
   base <- ggplot(dp_df, aes(x=dir,y=dp))
   p <- base + coord_polar() + ylim(0,yscale) +
     scale_x_continuous(limits=c(0,360),breaks=dir)
-  p + geom_segment(data = dp_df , aes(y=0,xend=dir,yend=dp),col="black") +
+  q <- p + geom_segment(data = dp_df , aes(y=0,xend=dir,yend=dp),col="black") +
     geom_segment(data = rdp_df , aes(y=0,xend=dir,yend=dp),
                  arrow=arrow(length=unit(0.3,"cm")),col="grey",size=1) +
     theme(axis.line=element_blank(),axis.text.x=element_blank(),
@@ -206,6 +120,8 @@ dp_plot <- function(dp,yscale=30){
           panel.background=element_blank(),panel.border=element_blank(),
           panel.grid.major=element_blank(),
           panel.grid.minor=element_blank(),plot.background=element_blank()) 
+  print(q)
+  return(q)
 }
 
 
@@ -220,23 +136,20 @@ dp_plot_yrs <- function(tib,row,yscale=30,fname=NULL){
     ggsave(fname,height = 3, width=3, units= "in")
   }
 }
-
 ```
 
 Import dp data for each station, drop rows with NA wind speeds, compute time intervals, compute drift potentials (q*dt, calling it dpt, dp is drift potential per time).
 
 ```{r}
-station_list<- c("beh","biv","grb","mdw","mke","mkg","tvc")
-first_yr <- c(1973,1997,1950,1948,1948,1948,1949) #first full year of data (on server)
-last_yr <- c(2019,2019,2019,2019,2019,2019,2019) #last full year of data
+beh <- readRDS('clean_data/BEH_19730101_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1973,1988,2020))
+biv <- readRDS('clean_data/KBIV_19961231_20201203_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1996,2020))
+grb <- readRDS('clean_data/GRB_19490901_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1949,2020))
+mdw <- readRDS('clean_data/MDW_19480101_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(2020))
+mke <- readRDS('clean_data/MKE_19471231_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1947,2020))
+mkg <- readRDS('clean_data/KMKG_19480101_20201204_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(2020))
+tvc <- readRDS('clean_data/TVC_19481201_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1948,2020))
 
-beh <- readRDS('./BEH/BEH_19730101_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1973,1988,2020))
-biv <- readRDS('./KBIV/KBIV_19961231_20201203_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1996,2020))
-grb <- readRDS('./GRB/GRB_19490901_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1949,2020))
-mdw <- readRDS('./MDW/MDW_19480101_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(2020))
-mke <- readRDS('./MKE/MKE_19471231_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1947,2020))
-mkg <- readRDS('./KMKG/KMKG_19480101_20201204_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(2020))
-tvc <- readRDS('./TVC/TVC_19481201_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1948,2020))
+station_list <- list(beh=beh,biv=biv,grb=grb,mdw=mdw,mke=mke,mkg=mkg,tvc=tvc)
 
 ##let's look at the lengths of runs of NA values in the wind speeds
 #rle_ws <- rle(is.na(beh$WS))
@@ -245,283 +158,93 @@ tvc <- readRDS('./TVC/TVC_19481201_20201207_dp.rds') %>% compute_dp_stuff() %>% 
 #print(table(rl_ws))
 ```
 
-```{r}
-beh_yr <- beh %>% compute_by_yr_stuff()
-biv_yr <- biv %>% compute_by_yr_stuff()
-grb_yr <- grb %>% compute_by_yr_stuff()
-mdw_yr <- mdw %>% compute_by_yr_stuff()
-mke_yr <- mke %>% compute_by_yr_stuff()
-mkg_yr <- mkg %>% compute_by_yr_stuff()
-tvc_yr <- tvc %>% compute_by_yr_stuff()
-```
-
 The dpt2 variable only computes drift potentials for at most a 3 hour duration. If the gap between reports is larger, then dpt2 is dp*3 (just the first 3 hours), and the rest of the duration is ignored (0 dp during the rest). The lost_dt variable measures how much time is lost doing things this way. We will remove years from the data where this adds up to more than 175 hours (2% of the year). In some cases, stations seemed to stop reporting at night (see, e.g., early BEH data). These years will not be represented in the data. In other cases there were large gaps in the data. These years are also removed.
+
 
 ```{r}
 lost_dt_max <- 175 #hrs
+station_list_yr <- station_list %>% map(compute_by_yr_stuff_directional) %>%
+  map(drop_big_lost_dt_yrs,dtmax=lost_dt_max)
 
-beh_yr_d <- beh_yr %>% drop_big_lost_dt_yrs(lost_dt_max)
-biv_yr_d <- biv_yr %>% drop_big_lost_dt_yrs(lost_dt_max)
-grb_yr_d <- grb_yr %>% drop_big_lost_dt_yrs(lost_dt_max)
-mdw_yr_d <- mdw_yr %>% drop_big_lost_dt_yrs(lost_dt_max)
-mke_yr_d <- mke_yr %>% drop_big_lost_dt_yrs(lost_dt_max)
-mkg_yr_d <- mkg_yr %>% drop_big_lost_dt_yrs(lost_dt_max)
-tvc_yr_d <- tvc_yr %>% drop_big_lost_dt_yrs(lost_dt_max)
+#beh_yr_dir <- beh %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
+#biv_yr_dir <- biv %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
+#grb_yr_dir <- grb %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
+#mdw_yr_dir <- mdw %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
+#mke_yr_dir <- mke %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
+#mkg_yr_dir <- mkg %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
+#tvc_yr_dir <- tvc %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
+
+#When doing decadal summaries, need to be mindful of missing years. Important if looking at dp totals, for example.
+breaks <- seq(1948,2018,by=10)
+station_list_dec <- station_list_yr %>% map(group_by_yrs,breaks=breaks)
 ```
 
 ```{r}
-plot(beh_yr_d$yr,beh_yr_d$dpt2_su,xlab='year',ylab='DP',pch=15,xlim=c(1948,2020),ylim=c(0,1e7),col="red")
-points(biv_yr_d$yr,biv_yr_d$dpt2_su,xlab='year',ylab='DP',pch=16,col="orange")
-points(grb_yr_d$yr,grb_yr_d$dpt2_su,xlab='year',ylab='DP',pch=17,col="magenta")
-points(mdw_yr_d$yr,mdw_yr_d$dpt2_su,xlab='year',ylab='DP',pch=18,col="green")
-points(mke_yr_d$yr,mke_yr_d$dpt2_su,xlab='year',ylab='DP',pch=19,col="blue")
-points(mkg_yr_d$yr,mkg_yr_d$dpt2_su,xlab='year',ylab='DP',pch=3,col="purple")
-points(tvc_yr_d$yr,tvc_yr_d$dpt2_su,xlab='year',ylab='DP',pch=8)
+plot(beh_yr_dir$yr,beh_yr_d$dpt2_su,xlab='year',ylab='DP',pch=15,xlim=c(1948,2020),ylim=c(0,1e7),col="red")
+points(biv_yr_dir$yr,biv_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=16,col="orange")
+points(grb_yr_dir$yr,grb_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=17,col="magenta")
+points(mdw_yr_dir$yr,mdw_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=18,col="green")
+points(mke_yr_dir$yr,mke_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=19,col="blue")
+points(mkg_yr_dir$yr,mkg_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=3,col="purple")
+points(tvc_yr_dir$yr,tvc_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=8)
 legend(2010,9.2e6,legend=c("BEH","BIV","GRB","MDW","MKE","MKG","TVC"), pch = c(15,16,17,18,19,3,8),col=c("red","orange","magenta","green","blue","purple","black"))
 ```
 
 
-```{r}
-beh_yr_dir <- beh %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-biv_yr_dir <- biv %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-grb_yr_dir <- grb %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-mdw_yr_dir <- mdw %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-mke_yr_dir <- mke %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-mkg_yr_dir <- mkg %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-tvc_yr_dir <- tvc %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-```
 
 ```{r}
-plot(mkg_yr_dir$yr,mkg_yr_dir$dp_wc)
-points(mkg_yr_dir$yr,mkg_yr_dir$dp_nwc,col="red")
-points(mkg_yr_dir$yr,mkg_yr_dir$dp_swc,col="blue")
-
-plot(mkg_yr_dir$yr,mkg_yr_dir$dp_wc/mkg_yr_dir$dpt2_su,ylim=c(0,1))
-points(mkg_yr_dir$yr,mkg_yr_dir$dp_nwc/mkg_yr_dir$dpt2_su,col="red")
-points(mkg_yr_dir$yr,mkg_yr_dir$dp_swc/mkg_yr_dir$dpt2_su,col="blue")
-
-plot(mkg_yr_dir$yr,mkg_yr_dir$dp_wc/mkg_yr_dir$dpt2_su,ylim=c(0,1))
-#points(mkg_yr_dir$yr,mkg_yr_dir$dp_nwc/mkg_yr_dir$dpt2_su,col="red")
-#points(mkg_yr_dir$yr,mkg_yr_dir$dp_swc/mkg_yr_dir$dpt2_su,col="blue")
-points(mkg_yr_dir$yr,mkg_yr_dir$dp_sc/mkg_yr_dir$dpt2_su,col="orange")
-points(mkg_yr_dir$yr,mkg_yr_dir$dp_nc/mkg_yr_dir$dpt2_su,col="magenta")
-#points(mkg_yr_dir$yr,mkg_yr_dir$dp_sec/mkg_yr_dir$dpt2_su,col="cyan")
-points(mkg_yr_dir$yr,mkg_yr_dir$dp_ec/mkg_yr_dir$dpt2_su,col="yellow")
-#points(mkg_yr_dir$yr,mkg_yr_dir$dp_nec/mkg_yr_dir$dpt2_su,col="purple")
-```
-
-```{r}
-breaks <- seq(1948,2018,by=10)
-beh_dec <- beh_yr_dir %>% group_by_yrs(breaks)
-biv_dec <- biv_yr_dir %>% group_by_yrs(breaks)
-grb_dec <- grb_yr_dir %>% group_by_yrs(breaks)
-mdw_dec <- mdw_yr_dir %>% group_by_yrs(breaks)
-mke_dec <- mke_yr_dir %>% group_by_yrs(breaks)
-mkg_dec <- mkg_yr_dir %>% group_by_yrs(breaks)
-tvc_dec <- tvc_yr_dir %>% group_by_yrs(breaks)
-```
-
-```{r}
-dp_plot_yrs(mdw_dec,1,yscale=2e7)
-dp_plot_yrs(mdw_dec,2,yscale=2e7)
-dp_plot_yrs(mdw_dec,3,yscale=2e7)
-dp_plot_yrs(mdw_dec,4,yscale=2e7)
-dp_plot_yrs(mdw_dec,5,yscale=2e7)
-dp_plot_yrs(mdw_dec,6,yscale=2e7)
-dp_plot_yrs(mdw_dec,7,yscale=2e7)
-```
-
-```{r}
-dp_plot_yrs(mke_dec,1,yscale=2.5e7)
-dp_plot_yrs(mke_dec,2,yscale=2.5e7)
-dp_plot_yrs(mke_dec,3,yscale=2.5e7)
-dp_plot_yrs(mke_dec,4,yscale=2.5e7)
-dp_plot_yrs(mke_dec,5,yscale=2.5e7)
-dp_plot_yrs(mke_dec,6,yscale=2.5e7)
-dp_plot_yrs(mke_dec,7,yscale=2.5e7)
-```
-
-```{r}
-dp_plot_yrs(mkg_dec,1,yscale=2e7)
-dp_plot_yrs(mkg_dec,2,yscale=2e7)
-dp_plot_yrs(mkg_dec,3,yscale=2e7)
-dp_plot_yrs(mkg_dec,4,yscale=2e7)
-dp_plot_yrs(mkg_dec,5,yscale=2e7)
-dp_plot_yrs(mkg_dec,6,yscale=2e7)
-dp_plot_yrs(mkg_dec,7,yscale=2e7)
-```
-
-
-Now by 'storm year'.
-
-
-```{r}
-station_list<- c("beh","biv","grb","mdw","mke","mkg","tvc")
-first_yr <- c(1973,1997,1950,1948,1948,1948,1949) #first full year of data (on server)
-last_yr <- c(2019,2019,2019,2019,2019,2019,2019) #last full year of data
-
-beh_s <- readRDS('./BEH/BEH_19730101_20201207_dp.rds') %>% compute_dp_stuff() %>% compute_storm_yrs()
-biv_s <- readRDS('./KBIV/KBIV_19961231_20201203_dp.rds') %>% compute_dp_stuff() %>% compute_storm_yrs()
-grb_s <- readRDS('./GRB/GRB_19490901_20201207_dp.rds') %>% compute_dp_stuff() %>% compute_storm_yrs()
-mdw_s <- readRDS('./MDW/MDW_19480101_20201207_dp.rds') %>% compute_dp_stuff() %>% compute_storm_yrs()
-mke_s <- readRDS('./MKE/MKE_19471231_20201207_dp.rds') %>% compute_dp_stuff() %>% compute_storm_yrs()
-mkg_s <- readRDS('./KMKG/KMKG_19480101_20201204_dp.rds') %>% compute_dp_stuff() %>% compute_storm_yrs()
-tvc_s <- readRDS('./TVC/TVC_19481201_20201207_dp.rds') %>% compute_dp_stuff() %>% compute_storm_yrs()
+#breaks <- seq(1948,2018,by=10)
+#beh_dec <- beh_yr_dir %>% group_by_yrs(breaks)
+#biv_dec <- biv_yr_dir %>% group_by_yrs(breaks)
+#grb_dec <- grb_yr_dir %>% group_by_yrs(breaks)
+#mdw_dec <- mdw_yr_dir %>% group_by_yrs(breaks)
+#mke_dec <- mke_yr_dir %>% group_by_yrs(breaks)
+#mkg_dec <- mkg_yr_dir %>% group_by_yrs(breaks)
+#tvc_dec <- tvc_yr_dir %>% group_by_yrs(breaks)
 ```
 
 
 ```{r}
-lost_dt_max <- 175 #hrs
-
-beh_s_yr_dir <- beh_s %>% compute_by_stormyr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-biv_s_yr_dir <- biv_s %>% compute_by_stormyr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-grb_s_yr_dir <- grb_s %>% compute_by_stormyr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-mdw_s_yr_dir <- mdw_s %>% compute_by_stormyr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-mke_s_yr_dir <- mke_s %>% compute_by_stormyr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-mkg_s_yr_dir <- mkg_s %>% compute_by_stormyr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-tvc_s_yr_dir <- tvc_s %>% compute_by_stormyr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-```
+dp_plot_yrs(mkg_dec,1,yscale=2.7e7,fname="outputs/mkg_1948_1957.pdf")
+dp_plot_yrs(mkg_dec,2,yscale=2.7e7,fname="outputs/mkg_1958_1967.pdf")
+dp_plot_yrs(mkg_dec,3,yscale=2.7e7,fname="outputs/mkg_1968_1977.pdf")
+dp_plot_yrs(mkg_dec,4,yscale=2.7e7,fname="outputs/mkg_1978_1987.pdf")
+dp_plot_yrs(mkg_dec,5,yscale=2.7e7,fname="outputs/mkg_1988_1997.pdf")
+dp_plot_yrs(mkg_dec,6,yscale=2.7e7,fname="outputs/mkg_1998_2007.pdf")
+dp_plot_yrs(mkg_dec,7,yscale=2.7e7,fname="outputs/mkg_2008_2017.pdf")
 
 
-```{r}
-breaks <- c(seq(1,364,by=14),367) #allow the last week to catch extra days (leap year)
-#tb <- biv_s %>% group_by_sy_sds(breaks) %>% drop_big_lost_dt_yrs_s(lost_dt_max) #what about start year where lostdt might be small because starts mid year?
+dp_plot_yrs(tvc_dec,1,yscale=2.7e7,fname="outputs/tvc_1948_1957.pdf")
+dp_plot_yrs(tvc_dec,2,yscale=2.7e7,fname="outputs/tvc_1958_1967.pdf")
+dp_plot_yrs(tvc_dec,3,yscale=2.7e7,fname="outputs/tvc_1968_1977.pdf")
+dp_plot_yrs(tvc_dec,4,yscale=2.7e7,fname="outputs/tvc_1978_1987.pdf")
+dp_plot_yrs(tvc_dec,5,yscale=2.7e7,fname="outputs/tvc_1988_1997.pdf")
+dp_plot_yrs(tvc_dec,6,yscale=2.7e7,fname="outputs/tvc_1998_2007.pdf")
+dp_plot_yrs(tvc_dec,7,yscale=2.7e7,fname="outputs/tvc_2008_2017.pdf")
 
+dp_plot_yrs(mke_dec,1,yscale=2.7e7,fname="outputs/mke_1948_1957.pdf")
+dp_plot_yrs(mke_dec,2,yscale=2.7e7,fname="outputs/mke_1958_1967.pdf")
+dp_plot_yrs(mke_dec,3,yscale=2.7e7,fname="outputs/mke_1968_1977.pdf")
+dp_plot_yrs(mke_dec,4,yscale=2.7e7,fname="outputs/mke_1978_1987.pdf")
+dp_plot_yrs(mke_dec,5,yscale=2.7e7,fname="outputs/mke_1988_1997.pdf")
+dp_plot_yrs(mke_dec,6,yscale=2.7e7,fname="outputs/mke_1998_2007.pdf")
+dp_plot_yrs(mke_dec,7,yscale=2.7e7,fname="outputs/mke_2008_2017.pdf")
 
-beh_yr_p <- beh_s %>% group_by_sy_sds(breaks) %>% drop_big_lost_dt_yrs_s(lost_dt_max,c(26,72))
-biv_yr_p <- biv_s %>% group_by_sy_sds(breaks) %>% drop_big_lost_dt_yrs_s(lost_dt_max,c(50,72))
-grb_yr_p <- grb_s %>% group_by_sy_sds(breaks) %>% drop_big_lost_dt_yrs_s(lost_dt_max,c(3,72))
-mdw_yr_p <- mdw_s %>% group_by_sy_sds(breaks) %>% drop_big_lost_dt_yrs_s(lost_dt_max,c(1,72))
-mke_yr_p <- mke_s %>% group_by_sy_sds(breaks) %>% drop_big_lost_dt_yrs_s(lost_dt_max,c(1,72))
-mkg_yr_p <- mkg_s %>% group_by_sy_sds(breaks) %>% drop_big_lost_dt_yrs_s(lost_dt_max,c(1,72))
-tvc_yr_p <- tvc_s %>% group_by_sy_sds(breaks) %>% drop_big_lost_dt_yrs_s(lost_dt_max,c(2,72))
-```
+dp_plot_yrs(grb_dec,1,yscale=2.7e7,fname="outputs/grb_1948_1957.pdf")
+dp_plot_yrs(grb_dec,2,yscale=2.7e7,fname="outputs/grb_1958_1967.pdf")
+dp_plot_yrs(grb_dec,3,yscale=2.7e7,fname="outputs/grb_1968_1977.pdf")
+dp_plot_yrs(grb_dec,4,yscale=2.7e7,fname="outputs/grb_1978_1987.pdf")
+dp_plot_yrs(grb_dec,5,yscale=2.7e7,fname="outputs/grb_1988_1997.pdf")
+dp_plot_yrs(grb_dec,6,yscale=2.7e7,fname="outputs/grb_1998_2007.pdf")
+dp_plot_yrs(grb_dec,7,yscale=2.7e7,fname="outputs/grb_2008_2017.pdf")
 
-```{r}
-pw <- pivot_wider(mkg_yr_p %>% select(c(-propFrozen,-meanT)),names_from=pd,values_from=dpt2) #need to drop NAs into missing years. Maybe look at lostdt by week and drop NAs in when 'large' 
-image(as.matrix(pw[,-1]))
-
-pw <- pivot_wider(mdw_yr_p %>% select(c(-propFrozen,-meanT)),names_from=pd,values_from=dpt2) #need to drop NAs into missing years. Maybe look at lostdt by week and drop NAs in when 'large' 
-image(as.matrix(pw[,-1]))
-
-pw <- pivot_wider(mke_yr_p %>% select(c(-propFrozen,-meanT)),names_from=pd,values_from=dpt2) #need to drop NAs into missing years. Maybe look at lostdt by week and drop NAs in when 'large' 
-image(as.matrix(pw[,-1]))
-
-#aggregate in year direction
-```
-
-```{r}
-plot(beh_yr_d$yr,beh_yr_dir$dp_sec,xlab='year',ylab='DPC',pch=15,xlim=c(1948,2020),ylim=c(0,4e6),col="red")
-points(biv_yr_d$yr,biv_yr_dir$dp_ec,pch=16,col="orange")
-points(grb_yr_d$yr,grb_yr_dir$dp_wc,pch=17,col="magenta")
-points(mdw_yr_d$yr,mdw_yr_dir$dp_swc,pch=18,col="green")
-points(mke_yr_d$yr,mke_yr_dir$dp_wc,pch=19,col="blue")
-points(mkg_yr_d$yr,mkg_yr_dir$dp_nec,pch=3,col="purple")
-points(tvc_yr_d$yr,tvc_yr_dir$dp_sec,pch=8,col="black")
-legend(2005,4.08e6,legend=c("BEH (SEC)","BIV (EC)","GRB (WC)","MDW (SWC)","MKE (WC)","MKG (NEC)","TVC (SEC)"), pch = c(15,16,17,18,19,3,8),col=c("red","orange","magenta","green","blue","purple","black"))
-```
-
-
-```{r}
-pwp <- pivot_wider(mkg_yr_p %>% select(c(-dpt2,-meanT)),names_from=pd,values_from=propFrozen) #need to drop NAs into missing years. Maybe look at lostdt by week and drop NAs in when 'large' 
-image(as.matrix(pwp[,-1]),col=hcl.colors(2, "YlOrRd", rev = TRUE),breaks=c(0,0.5,1))
-
-pwp <- pivot_wider(mdw_yr_p %>% select(c(-dpt2,-meanT)),names_from=pd,values_from=propFrozen) #need to drop NAs into missing years. Maybe look at lostdt by week and drop NAs in when 'large' 
-image(as.matrix(pwp[,-1]),col=hcl.colors(2, "YlOrRd", rev = TRUE),breaks=c(0,0.5,1))
-
-pwp <- pivot_wider(mke_yr_p %>% select(c(-dpt2,-meanT)),names_from=pd,values_from=propFrozen) #need to drop NAs into missing years. Maybe look at lostdt by week and drop NAs in when 'large' 
-image(as.matrix(pwp[,-1]),col=hcl.colors(2, "YlOrRd", rev = TRUE),breaks=c(0,0.5,1))
-
-#aggregate in year direction
-```
-
-
-
-
-
-```{r}
-pw <- pivot_wider(mkg_yr_p %>% select(c(-propFrozen,-dpt2)),names_from=pd,values_from=meanT) #need to drop NAs into missing years. Maybe look at lostdt by week and drop NAs in when 'large' 
-image(as.matrix(pw[,-1]))
-
-pw <- pivot_wider(mdw_yr_p %>% select(c(-propFrozen,-dpt2)),names_from=pd,values_from=meanT) #need to drop NAs into missing years. Maybe look at lostdt by week and drop NAs in when 'large' 
-image(as.matrix(pw[,-1]))
-
-pw <- pivot_wider(mke_yr_p %>% select(c(-propFrozen,-dpt2)),names_from=pd,values_from=meanT) #need to drop NAs into missing years. Maybe look at lostdt by week and drop NAs in when 'large' 
-#image(as.matrix(pw[,-1]),col=hcl.colors(60, "YlOrRd", rev = TRUE))
-image(as.matrix(pw[,-1]))
-
-#aggregate in year direction
-```
-
-
-
-```{r}
-
-mkg_T <- mkg_yr_p %>% group_by(storm_year) %>% summarize(meanT=mean(meanT))
-mkg_pF <- mkg_yr_p %>% group_by(storm_year) %>% summarize(pF=mean(propFrozen))
-mkg_pF50 <- mkg_yr_p %>% group_by(storm_year) %>% summarize(pF=sum(propFrozen>0.5))
-
-plot(mkg_T)
-plot(mkg_pF)
-plot(mkg_pF50)
-
-lm1 <- lm(pF~storm_year,data=mkg_pF)
-summary(lm1)
-plot(mkg_pF)
-abline(lm1,col='red')
-
-#roughly a decrease in the proportion of time when temperatures are below freezing corresponding to about 21 days per year over this period
-#this calucluation should be done more carefully, but it's probably pretty close to the careful value!
-```
-
-
-
-
-
-
-
-
-```{r}
-dp_plot_yrs(mkg_dec,1,yscale=2.7e7,fname="mkg_1948_1957.pdf")
-dp_plot_yrs(mkg_dec,2,yscale=2.7e7,fname="mkg_1958_1967.pdf")
-dp_plot_yrs(mkg_dec,3,yscale=2.7e7,fname="mkg_1968_1977.pdf")
-dp_plot_yrs(mkg_dec,4,yscale=2.7e7,fname="mkg_1978_1987.pdf")
-dp_plot_yrs(mkg_dec,5,yscale=2.7e7,fname="mkg_1988_1997.pdf")
-dp_plot_yrs(mkg_dec,6,yscale=2.7e7,fname="mkg_1998_2007.pdf")
-dp_plot_yrs(mkg_dec,7,yscale=2.7e7,fname="mkg_2008_2017.pdf")
-
-
-dp_plot_yrs(tvc_dec,1,yscale=2.7e7,fname="tvc_1948_1957.pdf")
-dp_plot_yrs(tvc_dec,2,yscale=2.7e7,fname="tvc_1958_1967.pdf")
-dp_plot_yrs(tvc_dec,3,yscale=2.7e7,fname="tvc_1968_1977.pdf")
-dp_plot_yrs(tvc_dec,4,yscale=2.7e7,fname="tvc_1978_1987.pdf")
-dp_plot_yrs(tvc_dec,5,yscale=2.7e7,fname="tvc_1988_1997.pdf")
-dp_plot_yrs(tvc_dec,6,yscale=2.7e7,fname="tvc_1998_2007.pdf")
-dp_plot_yrs(tvc_dec,7,yscale=2.7e7,fname="tvc_2008_2017.pdf")
-
-dp_plot_yrs(mke_dec,1,yscale=2.7e7,fname="mke_1948_1957.pdf")
-dp_plot_yrs(mke_dec,2,yscale=2.7e7,fname="mke_1958_1967.pdf")
-dp_plot_yrs(mke_dec,3,yscale=2.7e7,fname="mke_1968_1977.pdf")
-dp_plot_yrs(mke_dec,4,yscale=2.7e7,fname="mke_1978_1987.pdf")
-dp_plot_yrs(mke_dec,5,yscale=2.7e7,fname="mke_1988_1997.pdf")
-dp_plot_yrs(mke_dec,6,yscale=2.7e7,fname="mke_1998_2007.pdf")
-dp_plot_yrs(mke_dec,7,yscale=2.7e7,fname="mke_2008_2017.pdf")
-
-dp_plot_yrs(grb_dec,1,yscale=2.7e7,fname="grb_1948_1957.pdf")
-dp_plot_yrs(grb_dec,2,yscale=2.7e7,fname="grb_1958_1967.pdf")
-dp_plot_yrs(grb_dec,3,yscale=2.7e7,fname="grb_1968_1977.pdf")
-dp_plot_yrs(grb_dec,4,yscale=2.7e7,fname="grb_1978_1987.pdf")
-dp_plot_yrs(grb_dec,5,yscale=2.7e7,fname="grb_1988_1997.pdf")
-dp_plot_yrs(grb_dec,6,yscale=2.7e7,fname="grb_1998_2007.pdf")
-dp_plot_yrs(grb_dec,7,yscale=2.7e7,fname="grb_2008_2017.pdf")
-
-dp_plot_yrs(mdw_dec,1,yscale=2.7e7,fname="mdw_1948_1957.pdf")
-dp_plot_yrs(mdw_dec,2,yscale=2.7e7,fname="mdw_1958_1967.pdf")
-dp_plot_yrs(mdw_dec,3,yscale=2.7e7,fname="mdw_1968_1977.pdf")
-dp_plot_yrs(mdw_dec,4,yscale=2.7e7,fname="mdw_1978_1987.pdf")
-dp_plot_yrs(mdw_dec,5,yscale=2.7e7,fname="mdw_1988_1997.pdf")
-dp_plot_yrs(mdw_dec,6,yscale=2.7e7,fname="mdw_1998_2007.pdf")
-dp_plot_yrs(mdw_dec,7,yscale=2.7e7,fname="mdw_2008_2017.pdf")
+dp_plot_yrs(mdw_dec,1,yscale=2.7e7,fname="outputs/mdw_1948_1957.pdf")
+dp_plot_yrs(mdw_dec,2,yscale=2.7e7,fname="outputs/mdw_1958_1967.pdf")
+dp_plot_yrs(mdw_dec,3,yscale=2.7e7,fname="outputs/mdw_1968_1977.pdf")
+dp_plot_yrs(mdw_dec,4,yscale=2.7e7,fname="outputs/mdw_1978_1987.pdf")
+dp_plot_yrs(mdw_dec,5,yscale=2.7e7,fname="outputs/mdw_1988_1997.pdf")
+dp_plot_yrs(mdw_dec,6,yscale=2.7e7,fname="outputs/mdw_1998_2007.pdf")
+dp_plot_yrs(mdw_dec,7,yscale=2.7e7,fname="outputs/mdw_2008_2017.pdf")
 ```
 
 
