@@ -86,8 +86,10 @@ drop_big_lost_dt_yrs<- function(tib,dtmax=175){
 
 
 group_by_yrs <- function(tib,breaks){
-  tib <- tib %>% group_by(gr=cut(yr,breaks=breaks,right=FALSE)) %>%
-    summarize_at(vars(dpt2_su:nobs),sum,na.rm=TRUE)
+  tib <- tib %>%
+    mutate(num_yrs = 1) %>%
+    group_by(gr=cut(yr,breaks=breaks,right=FALSE)) %>%
+    summarize_at(vars(dpt2_su:num_yrs),sum,na.rm=TRUE)
   return(tib)
 }
 
@@ -106,6 +108,8 @@ dp_plot <- function(dp,yscale=30){
   rdp_df <- structure(list(dir = rdir, dp = rdp),.Names=c("dir", "dp"),
                       class="data.frame",row.names=c(17L) )
   
+  if(yscale=="RDP"){yscale <- 2.7e7*rdp_df[1,2]/13075309} #normalize by RDP - details are weird. Set to match scaling of an earlier plot
+  
   #Set ylim to be as large as needed for largest dp in set of diagrams being displayed together. Then we get consistent scaling
   base <- ggplot(dp_df, aes(x=dir,y=dp))
   p <- base + coord_polar() + ylim(0,yscale) +
@@ -120,7 +124,7 @@ dp_plot <- function(dp,yscale=30){
           panel.background=element_blank(),panel.border=element_blank(),
           panel.grid.major=element_blank(),
           panel.grid.minor=element_blank(),plot.background=element_blank()) 
-  print(q)
+  #print(q)
   return(q)
 }
 
@@ -129,12 +133,22 @@ dp_plot_yrs <- function(tib,row,yscale=30,fname=NULL){
   st <- which(names(tib)=="dp_n")
   en <- which(names(tib)=="dp_nnw")
   dp <- as.numeric(tib[row,st:en])
-  print(dp)
-  print(str(dp))
+  #print(dp)
+  #print(str(dp))
   dp_plot(dp,yscale=yscale)
   if(!is.null(fname)){
     ggsave(fname,height = 3, width=3, units= "in")
   }
+}
+
+compute_rel_dp <- function(tib){
+  #levs <- c("n","nne","ne","ene","e","ese","se","sse","s","ssw","sw","wsw","w","wnw","nw","nnw")
+  levs <- rev(c("e","ese","se","sse","s","ssw","sw","wsw","w","wnw","nw","nnw","n","nne","ne","ene"))
+  tib <- tib %>% mutate_at(vars(dp_n:dp_nnw),funs(./dpt2_su)) %>%
+    select(station:dp_nnw) %>% select(-(dp_m:lost_dt_su)) %>%
+    pivot_longer(!c(station,yr),names_to="dir",values_to="dp") %>%
+    mutate(dir=factor(gsub(".*_","",dir),levels=levs))
+  return(tib)
 }
 ```
 
@@ -150,101 +164,66 @@ mkg <- readRDS('clean_data/KMKG_19480101_20201204_dp.rds') %>% compute_dp_stuff(
 tvc <- readRDS('clean_data/TVC_19481201_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1948,2020))
 
 station_list <- list(beh=beh,biv=biv,grb=grb,mdw=mdw,mke=mke,mkg=mkg,tvc=tvc)
-
-##let's look at the lengths of runs of NA values in the wind speeds
-#rle_ws <- rle(is.na(beh$WS))
-#rl_ws <- rle_ws$lengths[rle_ws$values]
-#rl_ws
-#print(table(rl_ws))
 ```
 
-The dpt2 variable only computes drift potentials for at most a 3 hour duration. If the gap between reports is larger, then dpt2 is dp*3 (just the first 3 hours), and the rest of the duration is ignored (0 dp during the rest). The lost_dt variable measures how much time is lost doing things this way. We will remove years from the data where this adds up to more than 175 hours (2% of the year). In some cases, stations seemed to stop reporting at night (see, e.g., early BEH data). These years will not be represented in the data. In other cases there were large gaps in the data. These years are also removed.
-
+The dpt2 variable computes drift potentials for at most a 3 hour duration. If the gap between reports is larger, then dpt2 is dp*3 (just the first 3 hours), and the rest of the duration is ignored (0 dp during the rest). The lost_dt variable measures how much time is lost doing things this way. We will remove years from the data where this adds up to more than 175 hours (2% of the year). In some cases, stations seemed to stop reporting at night (see, e.g., early BEH data). These years will not be represented in the data. In other cases there were large gaps in the data. These years are also removed.
 
 ```{r}
 lost_dt_max <- 175 #hrs
 station_list_yr <- station_list %>% map(compute_by_yr_stuff_directional) %>%
-  map(drop_big_lost_dt_yrs,dtmax=lost_dt_max)
+  map(drop_big_lost_dt_yrs,dtmax=lost_dt_max) #as a list of tibbles
+station_yr <- station_list_yr %>% bind_rows(.id='station') #as a single tibble (better for plotting)
+```
 
-#beh_yr_dir <- beh %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-#biv_yr_dir <- biv %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-#grb_yr_dir <- grb %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-#mdw_yr_dir <- mdw %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-#mke_yr_dir <- mke %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-#mkg_yr_dir <- mkg %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
-#tvc_yr_dir <- tvc %>% compute_by_yr_stuff_directional() %>% drop_big_lost_dt_yrs(lost_dt_max)
+Now create decadal summaries. When doing decadal summaries this way, it is important to be mindful of missing years introduced in the previous step. This is especially important if looking at decadal dp totals, for example. To make the comparison fair this should probably be divided by the number of years retained in the decade. The number of years retained is located in the num_yrs column.
 
-#When doing decadal summaries, need to be mindful of missing years. Important if looking at dp totals, for example.
+```{r}
 breaks <- seq(1948,2018,by=10)
-station_list_dec <- station_list_yr %>% map(group_by_yrs,breaks=breaks)
+station_list_dec <- station_list_yr %>% map(group_by_yrs,breaks=breaks) #as a list of tibbles
+station_dec <- station_list_dec %>% bind_rows(.id='station') #as a single tibble
+
+stat_dec_numyrs <- station_dec %>% select(station,gr,num_yrs)
+print(stat_dec_numyrs)
+```
+
+Plot the total drift potential for each year and for each station.
+
+```{r}
+(p <- ggplot(data = station_yr, aes(x = yr, y = dpt2_su, shape = station, color = station)) +
+   geom_point() +
+   scale_shape_manual(values=c(15,16,17,18,19,3,8)) +
+   ylab('drift potential') +
+   xlab('year'))
+
+ggsave('outputs/dp_yearly.pdf')
 ```
 
 ```{r}
-plot(beh_yr_dir$yr,beh_yr_d$dpt2_su,xlab='year',ylab='DP',pch=15,xlim=c(1948,2020),ylim=c(0,1e7),col="red")
-points(biv_yr_dir$yr,biv_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=16,col="orange")
-points(grb_yr_dir$yr,grb_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=17,col="magenta")
-points(mdw_yr_dir$yr,mdw_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=18,col="green")
-points(mke_yr_dir$yr,mke_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=19,col="blue")
-points(mkg_yr_dir$yr,mkg_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=3,col="purple")
-points(tvc_yr_dir$yr,tvc_yr_dir$dpt2_su,xlab='year',ylab='DP',pch=8)
-legend(2010,9.2e6,legend=c("BEH","BIV","GRB","MDW","MKE","MKG","TVC"), pch = c(15,16,17,18,19,3,8),col=c("red","orange","magenta","green","blue","purple","black"))
+fry_table_stations <- c("mkg","tvc","mke","grb","mdw")
+#yscales <- rep(2.7e7,5)
+yscales <- rep("RDP",5) #normalize to rdp
+ros <- 1:7
+yr_int_str <- c("1948_1957","1958_1967","1968_1977","1978_1987","1988_1997","1998_2007","2008_2017")
+
+
+for(i in seq_along(fry_table_stations)){ #loop over stations
+  for(j in seq_along(ros)){ #loop over decades
+    fname <- paste0("outputs/",fry_table_stations[i],"_",yr_int_str[j],".pdf") #plots are saved as pdfs. These are the file names.
+    dp_plot_yrs(station_list_dec[[fry_table_stations[i]]],ros[j],yscale=yscales[i],fname=fname)
+  }
+}
 ```
 
-
-
 ```{r}
-#breaks <- seq(1948,2018,by=10)
-#beh_dec <- beh_yr_dir %>% group_by_yrs(breaks)
-#biv_dec <- biv_yr_dir %>% group_by_yrs(breaks)
-#grb_dec <- grb_yr_dir %>% group_by_yrs(breaks)
-#mdw_dec <- mdw_yr_dir %>% group_by_yrs(breaks)
-#mke_dec <- mke_yr_dir %>% group_by_yrs(breaks)
-#mkg_dec <- mkg_yr_dir %>% group_by_yrs(breaks)
-#tvc_dec <- tvc_yr_dir %>% group_by_yrs(breaks)
-```
+station_yr_rel <- station_yr %>% compute_rel_dp() #already in long format
 
+mke_rel <- station_yr_rel %>% filter(station=="mke")
 
-```{r}
-dp_plot_yrs(mkg_dec,1,yscale=2.7e7,fname="outputs/mkg_1948_1957.pdf")
-dp_plot_yrs(mkg_dec,2,yscale=2.7e7,fname="outputs/mkg_1958_1967.pdf")
-dp_plot_yrs(mkg_dec,3,yscale=2.7e7,fname="outputs/mkg_1968_1977.pdf")
-dp_plot_yrs(mkg_dec,4,yscale=2.7e7,fname="outputs/mkg_1978_1987.pdf")
-dp_plot_yrs(mkg_dec,5,yscale=2.7e7,fname="outputs/mkg_1988_1997.pdf")
-dp_plot_yrs(mkg_dec,6,yscale=2.7e7,fname="outputs/mkg_1998_2007.pdf")
-dp_plot_yrs(mkg_dec,7,yscale=2.7e7,fname="outputs/mkg_2008_2017.pdf")
+(q <- ggplot(data = mke_rel, aes(x = yr, y = dp, fill = dir)) +
+    geom_bar(stat="identity") +
+    theme_minimal())
 
-
-dp_plot_yrs(tvc_dec,1,yscale=2.7e7,fname="outputs/tvc_1948_1957.pdf")
-dp_plot_yrs(tvc_dec,2,yscale=2.7e7,fname="outputs/tvc_1958_1967.pdf")
-dp_plot_yrs(tvc_dec,3,yscale=2.7e7,fname="outputs/tvc_1968_1977.pdf")
-dp_plot_yrs(tvc_dec,4,yscale=2.7e7,fname="outputs/tvc_1978_1987.pdf")
-dp_plot_yrs(tvc_dec,5,yscale=2.7e7,fname="outputs/tvc_1988_1997.pdf")
-dp_plot_yrs(tvc_dec,6,yscale=2.7e7,fname="outputs/tvc_1998_2007.pdf")
-dp_plot_yrs(tvc_dec,7,yscale=2.7e7,fname="outputs/tvc_2008_2017.pdf")
-
-dp_plot_yrs(mke_dec,1,yscale=2.7e7,fname="outputs/mke_1948_1957.pdf")
-dp_plot_yrs(mke_dec,2,yscale=2.7e7,fname="outputs/mke_1958_1967.pdf")
-dp_plot_yrs(mke_dec,3,yscale=2.7e7,fname="outputs/mke_1968_1977.pdf")
-dp_plot_yrs(mke_dec,4,yscale=2.7e7,fname="outputs/mke_1978_1987.pdf")
-dp_plot_yrs(mke_dec,5,yscale=2.7e7,fname="outputs/mke_1988_1997.pdf")
-dp_plot_yrs(mke_dec,6,yscale=2.7e7,fname="outputs/mke_1998_2007.pdf")
-dp_plot_yrs(mke_dec,7,yscale=2.7e7,fname="outputs/mke_2008_2017.pdf")
-
-dp_plot_yrs(grb_dec,1,yscale=2.7e7,fname="outputs/grb_1948_1957.pdf")
-dp_plot_yrs(grb_dec,2,yscale=2.7e7,fname="outputs/grb_1958_1967.pdf")
-dp_plot_yrs(grb_dec,3,yscale=2.7e7,fname="outputs/grb_1968_1977.pdf")
-dp_plot_yrs(grb_dec,4,yscale=2.7e7,fname="outputs/grb_1978_1987.pdf")
-dp_plot_yrs(grb_dec,5,yscale=2.7e7,fname="outputs/grb_1988_1997.pdf")
-dp_plot_yrs(grb_dec,6,yscale=2.7e7,fname="outputs/grb_1998_2007.pdf")
-dp_plot_yrs(grb_dec,7,yscale=2.7e7,fname="outputs/grb_2008_2017.pdf")
-
-dp_plot_yrs(mdw_dec,1,yscale=2.7e7,fname="outputs/mdw_1948_1957.pdf")
-dp_plot_yrs(mdw_dec,2,yscale=2.7e7,fname="outputs/mdw_1958_1967.pdf")
-dp_plot_yrs(mdw_dec,3,yscale=2.7e7,fname="outputs/mdw_1968_1977.pdf")
-dp_plot_yrs(mdw_dec,4,yscale=2.7e7,fname="outputs/mdw_1978_1987.pdf")
-dp_plot_yrs(mdw_dec,5,yscale=2.7e7,fname="outputs/mdw_1988_1997.pdf")
-dp_plot_yrs(mdw_dec,6,yscale=2.7e7,fname="outputs/mdw_1998_2007.pdf")
-dp_plot_yrs(mdw_dec,7,yscale=2.7e7,fname="outputs/mdw_2008_2017.pdf")
+ggsave("outputs/mke_yr_rel_stack.pdf")
 ```
 
 
