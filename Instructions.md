@@ -26,7 +26,15 @@ Cleaning steps included selecting the correct rows, labeling columns, and creati
 
 The only preprocessing was calculating drift potential (per time) following Fryberger and Dean.
 
-# Analyzing and visualizing the data
+## Analyzing and visualizing the data
+
+I did some additional processing of the data and construct some plots in the 'Long_term_analysis.Rmd' file. There is variation in the length of time between measurements. In some years it even appears as if measurements are not made at night at some stations. Rather than assuming that the last wind measurement preceding a long period is representative for the entire period, I decided to limit the period to just the first three hours following the last wind measurement. The remaining time period is considered lost time, during which we have no applicable wind measurements. I kept track of the amount of time that is lost each year. In yearly calculations, years with more than 175 lost hours were removed from the calculations. Drift potential is computed by multiplying drift potential per time (computed in the 'Combine_Station.Rmd' script) by the amount of time until the next measurements (or three hours if that is smaller).
+
+For each station, drift potentials were totaled over each year (without too much lost time). Drift potentials were also totaled by direction for 16 directions (N, NNE, ENE, E, ..., NNW). These are useful for creating Fryberger diagrams. 'Coast' drift potentials were also computed for 8 directions. These represent wind directions within 45 degrees of the central 'coast' direction.
+
+Decadal totals were also computed for each of the above mentioned directions and over all.
+
+The total yearly drift potential was plotted over time for the seven stations. Decadal Fryberger diagrams were plotted for 5 stations with longer data sets. These were scaled so that the resultant drift potential vector had the same length for each station. The relative proportion of drift potential from each of the 16 directions was also computed and plotted as stacked bar plots for each station. These show yearly variation in the directions of drift potential.
 
 
 
