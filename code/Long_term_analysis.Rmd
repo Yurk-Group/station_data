@@ -19,33 +19,35 @@ library(lubridate)
 library(ggplot2)
 ```
 
+Some functions here. A few only do one thing.
+
 ```{r}
-compute_durations <- function(tib){
+compute_durations <- function(tib){ #computes time elapsed between measurements (hours)
   tib <- tib %>% mutate(dt = as.duration(lag(datetime,1) %--% datetime)/dhours(1))
   return(tib)
 }
 
-compute_dpt <- function(tib){
+compute_dpt <- function(tib){ #computes drift potential from drift potential per time and time interval width
   tib <- tib %>% mutate(dpt = dp*dt)
   return(tib)
 }
 
-compute_dpt2 <- function(tib,dtmax=3){
+compute_dpt2 <- function(tib,dtmax=3){ #computes modified drift potentil by not allowing time intervals to exceed 3 hours. For those that do, the remainder of the time interval is recorded
   tib <- tib %>% mutate(dpt2 = dp*pmin(dt,3),lost_dt = dt-pmin(dt,3))
   return(tib)
 }
 
-compute_dp_stuff <- function(tib,dtmax = 3){
+compute_dp_stuff <- function(tib,dtmax = 3){ #applies the previous functions after dropping na wind speeds
   tib <- tib %>% drop_na(WS) %>% compute_durations() %>% compute_dpt() %>% compute_dpt2(dtmax)
   return(tib)
 }
 
-drop_yrs <- function(tib,yrs){
+drop_yrs <- function(tib,yrs){ #drops specified years from data
   tib <- tib[!(year(tib$datetime) %in% yrs),]
   return(tib)
 }
 
-compute_by_yr_stuff_directional <- function(tib){
+compute_by_yr_stuff_directional <- function(tib){ #yearly totals: drift potential, by direction, by coast; lost time, number of observations, etc
   tib <- tib %>% select(datetime,dt,dp,WD,dpt,dpt2,lost_dt) %>% mutate(yr = year(datetime)) %>%
     group_by(yr) %>% 
     summarize(dp_m = mean(dp,na.rm=TRUE),dt_m=mean(dt,na.rm=TRUE),dt_sd=sd(dt,na.rm=TRUE),
@@ -79,13 +81,13 @@ compute_by_yr_stuff_directional <- function(tib){
 }
 
 
-drop_big_lost_dt_yrs<- function(tib,dtmax=175){
+drop_big_lost_dt_yrs<- function(tib,dtmax=175){ #drop years with more than 175 (default) hours of lost time
   tib <- tib[tib$lost_dt_su<=dtmax,]
   return(tib)
 }
 
 
-group_by_yrs <- function(tib,breaks){
+group_by_yrs <- function(tib,breaks){ #a function to group the data by years - used for decadal computations
   tib <- tib %>%
     mutate(num_yrs = 1) %>%
     group_by(gr=cut(yr,breaks=breaks,right=FALSE)) %>%
@@ -93,7 +95,7 @@ group_by_yrs <- function(tib,breaks){
   return(tib)
 }
 
-dp_plot <- function(dp,yscale=30){
+dp_plot <- function(dp,yscale=30){ #plot fryberger diagrams
   dir <- seq(0,360-22.5,by=22.5)
   ndp <- dp*cos(dir*pi/180) #north components of dp
   edp <- dp*sin(dir*pi/180) #east components of dp
@@ -129,7 +131,7 @@ dp_plot <- function(dp,yscale=30){
 }
 
 
-dp_plot_yrs <- function(tib,row,yscale=30,fname=NULL){
+dp_plot_yrs <- function(tib,row,yscale=30,fname=NULL){ #plot and maybe save fryberger diagram for a particular row of the data
   st <- which(names(tib)=="dp_n")
   en <- which(names(tib)=="dp_nnw")
   dp <- as.numeric(tib[row,st:en])
@@ -141,7 +143,7 @@ dp_plot_yrs <- function(tib,row,yscale=30,fname=NULL){
   }
 }
 
-compute_rel_dp <- function(tib){
+compute_rel_dp <- function(tib){ #Compute directional dps as proportion of total dp
   #levs <- c("n","nne","ne","ene","e","ese","se","sse","s","ssw","sw","wsw","w","wnw","nw","nnw")
   levs <- rev(c("e","ese","se","sse","s","ssw","sw","wsw","w","wnw","nw","nnw","n","nne","ne","ene"))
   tib <- tib %>% mutate_at(vars(dp_n:dp_nnw),funs(./dpt2_su)) %>%
@@ -152,7 +154,7 @@ compute_rel_dp <- function(tib){
 }
 ```
 
-Import dp data for each station, drop rows with NA wind speeds, compute time intervals, compute drift potentials (q*dt, calling it dpt, dp is drift potential per time).
+Import dp data for each station, drop rows with NA wind speeds, compute time intervals, compute drift potentials (q*dt, calling it dpt, dp is drift potential per time). Drop partial years at the beginning and end of the data. 1988 is missing from the data at BEH. Make a list of data frames to streamline what would otherwise be repetitive function calls.
 
 ```{r}
 beh <- readRDS('clean_data/BEH_19730101_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1973,1988,2020))
@@ -166,7 +168,7 @@ tvc <- readRDS('clean_data/TVC_19481201_20201207_dp.rds') %>% compute_dp_stuff()
 station_list <- list(beh=beh,biv=biv,grb=grb,mdw=mdw,mke=mke,mkg=mkg,tvc=tvc)
 ```
 
-The dpt2 variable computes drift potentials for at most a 3 hour duration. If the gap between reports is larger, then dpt2 is dp*3 (just the first 3 hours), and the rest of the duration is ignored (0 dp during the rest). The lost_dt variable measures how much time is lost doing things this way. We will remove years from the data where this adds up to more than 175 hours (2% of the year). In some cases, stations seemed to stop reporting at night (see, e.g., early BEH data). These years will not be represented in the data. In other cases there were large gaps in the data. These years are also removed.
+Compute yearly drift potentials, including by direction. The dpt2 variable computes drift potentials for at most a 3 hour duration. If the gap between reports is larger, then dpt2 is dp*3 (just the first 3 hours), and the rest of the duration is ignored (0 dp during the rest). The lost_dt variable measures how much time is lost. We remove years from the data where this adds up to more than 175 hours (2% of the year). In some cases, stations seemed to stop reporting at night (see, e.g., early BEH data). These years will not be represented in the data. In other cases there were large gaps in the data. These years are also removed.
 
 ```{r}
 lost_dt_max <- 175 #hrs
@@ -175,7 +177,7 @@ station_list_yr <- station_list %>% map(compute_by_yr_stuff_directional) %>%
 station_yr <- station_list_yr %>% bind_rows(.id='station') #as a single tibble (better for plotting)
 ```
 
-Now create decadal summaries. When doing decadal summaries this way, it is important to be mindful of missing years introduced in the previous step. This is especially important if looking at decadal dp totals, for example. To make the comparison fair this should probably be divided by the number of years retained in the decade. The number of years retained is located in the num_yrs column.
+Now create decadal summaries. When doing decadal summaries this way, it is important to be mindful of missing years introduced in the previous step. This is especially important if looking at decadal dp totals, for example. To make comparisons of amounts of drift potential fair this should be divided by the number of years retained in the decade. The number of years retained is located in the num_yrs column. We do not do this sort of comparison. Decades are 1948-1957, 1958-1967,..., 2008-2017.
 
 ```{r}
 breaks <- seq(1948,2018,by=10)
@@ -198,6 +200,8 @@ Plot the total drift potential for each year and for each station.
 ggsave('outputs/dp_yearly.pdf')
 ```
 
+Plot and save decadal Fryberger diagrams for 5 stations.
+
 ```{r}
 fry_table_stations <- c("mkg","tvc","mke","grb","mdw")
 #yscales <- rep(2.7e7,5)
@@ -213,6 +217,9 @@ for(i in seq_along(fry_table_stations)){ #loop over stations
   }
 }
 ```
+
+
+Compute relative drift potentials from each direction (16 directions) and plot stacked bar plots showing changes in drift potential direction over time for a single station.
 
 ```{r}
 station_yr_rel <- station_yr %>% compute_rel_dp() #already in long format
