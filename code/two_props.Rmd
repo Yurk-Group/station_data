@@ -20,6 +20,7 @@ library(lubridate)
 library(ggplot2)
 ```
 
+Some functions. The first creates 2x2 contingency tables. Events are grouped according to whether drift potential exceeds a threshold for a particular coast-station pair or not. The number of events with system (low or high pressure) centers in a particular direction or not is compared between the two groups. Ultimately a Fisher exact test is run on each contingency table (e.g., for each direction for a coast-station pair) and the proportions are plotted for the two groups for each system center direction.
 
 ```{r}
 #build contingency table
@@ -33,7 +34,6 @@ con_tab <- function(data,cdir_stat,sysDir,dpthresh=1,lo=TRUE){
   tib <- tib %>% mutate( boolCDir = (dp >= dpthresh), boolSysDir =( (sTart == sysDir) | (eNd == sysDir) ) ) %>% 
       select(-dp,-sTart,-eNd)
   
-  #why are there still NA rows in this data set?
   tib <- tib %>% drop_na() %>% group_by(boolCDir) %>% summarize(SysDirT = sum(boolSysDir),SysDirF = sum(!boolSysDir))
   
   if(tib$boolCDir[1]){
@@ -72,6 +72,7 @@ fisher_test_coast <- function(data,cdir_stat,sysDirs,dpthresh=1,lo=TRUE){
   return(list(p_vals=p_vals,prop_df=prop_df))
 }
 
+# given the output of fisher_test_coast, plot proportions of events in with system center in the given direction for the two groups
 plot_props <- function(ftc){
   prop_df <- ftc$prop_df
   print(prop_df)
@@ -90,6 +91,8 @@ plot_props <- function(ftc){
 }
 
 ```
+
+Import the data, run the test for a specified coast-station pair, and plot the proportions.
 
 ```{r}
 library(xlsx)
@@ -116,21 +119,4 @@ ftc %>% plot_props()
 
 prop_df <- ftc$prop_df
 p_vals <- data.frame(ftc$p_vals)
-```
-
-
-```{r}
-#some code I could not get to work!
-# ast_fun<-function(bool){
-#   b<-rep(NA,length(bool))
-#   b[bool] <- "*"
-#   b[!bool] <- ""
-#   return(b)
-# }
-# 
-# pval_df <- tibble(p_vals) %>% mutate(sysDir=names(p_vals),sig=ast_fun(p_vals<0.05))
-# levs <- prop_df_long %>% group_by(sysDir) %>% summarize(proportion=max(proportion))
-# pval_df <- pval_df %>% full_join(levs,by=c("sysDir"="sysDir")) %>% select(-p_vals)
-#p + geom_text(data=pval_df, aes(label=sig,x=reorder(sysDir,as.numeric(sysDir)), y=proportion), color="black",position=position_dodge(), size=3.5)
-
 ```
