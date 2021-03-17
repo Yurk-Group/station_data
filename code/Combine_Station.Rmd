@@ -1,0 +1,124 @@
+---
+title: "Clean and Preprocess Station Data"
+author: "Yurk"
+date: "3/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+require("knitr")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir=normalizePath("..")) #set working directory to the project directory
+```
+
+```{r}
+rm(list=ls())
+gc()
+library(tidyverse)
+library(lubridate)
+```
+
+We first construct a function that will remove repetitive rows and rows without valid time stamps that are present in some data sets. The function also merges data from separate csv files covering different time ranges. The function also sets names and data types for the columns and creates a column with sample times in a time format.
+
+```{r}
+stationClean <- function(infileList,rowRangeList){
+  
+  #labels and data types for columns
+  col_names <- c("Date","Time","Temp","RH","Dewpt","WS","WD","Gust","LoCloudHt","MedCloudHt","HiCloudHt","Vis","AtmPres","SLP","Altim","Precip","WindChill","HeatIndex","empty")
+  col_types <- cols("D","t","d","d","d","d","d","d","d","d","d","d","d","d","d","d","d","d","d")
+  col_units <- c("Date","EST","F","perc","F","mph","deg","ft","ft","ft","mi","hPa","hPa","hPa","in","F","F")
+  
+  
+  data <- NULL
+  for(i in 1:length(infileList)){
+    fname <- infileList[[i]]
+    skipRows <- rowRangeList[[i]][1]
+    nRows <- rowRangeList[[i]][2]
+    d <- read_csv(fname,skip=skipRows,col_names=col_names,col_types=col_types,na=c("","m","M","NC"),n_max=nRows) %>% select(-empty)
+    data <- bind_rows(data,d)
+  }
+  
+  #drop any rows without a valid time stamp
+  if(any(is.na(data$Time))){
+    prob_rows <- which(is.na(data$Time))
+    data <- data[-prob_rows,]
+  }
+  
+  # create time object with sample times
+  data <- data %>% mutate(datetime=ymd(Date,tz="EST")+hms(Time))
+  
+  return(data)
+}
+```
+
+Next we construct a function that will calculate drift potential per time, following Fryberger and Dean. Note that this allows the station height to be specified if it not at the standard 10m height. The function assumes that wind speed units are mph.
+
+```{r}
+dp_from_ws <- function(ws,ht=10){ #assumes ws units are miles per hour
+  ws10 <- ws*log(200)/log(20*ht) #estimate speed at 10m
+  ws10kt <- ws*0.868976 #mph to knots
+  q <- ws10kt^2*(ws10kt-12) #threshold 12 knots as in Fryberger and Dean
+  q <- q*(q>0) #dp should be zero if ws is below threshold
+  return(q)
+}
+```
+
+Next we create a function to do the cleaning steps, compute drift potentials, and save the output file for a single station.
+
+
+```{r}
+stat_clean_preproc <- function(stat_par){
+  data <- stationClean(infileList=stat_par[["infiles"]],rowRangeList=stat_par[["rowRange"]])
+  data <- data %>% mutate(dp = dp_from_ws(WS))
+  outfile <- stat_par[["outfile"]]
+  saveRDS(data,file=outfile)
+  return(data)
+}
+```
+
+Now we specify the necessary information for using the functions to clean and preprocess the data for each station.
+
+```{r}
+#beh
+beh_par <- list(infiles=list("raw_data/BEH_19730101_20201207.csv"),
+                rowRange = list(c(9+1102,320439-1102)),
+                outfile="clean_data/BEH_19730101_20201207_dp.rds") 
+#grb
+grb_par <- list(infiles=list("raw_data/GRB_19500101_19591231.csv","raw_data/GRB_19600101_19891231.csv","raw_data/GRB_19900101_20201207.csv"),
+                rowRange = list(c(9+2376,92946-2376),c(9,213627),c(9,270376)),
+                outfile="clean_data/GRB_19490901_20201207_dp.rds") 
+#kbiv
+kbiv_par <- list(infiles=list("raw_data/KBIV_19961231_20201203.csv"),
+                 rowRange = list(c(9,209477)),
+                 outfile="clean_data/KBIV_19961231_20201203_dp.rds")
+#kmkg
+kmkg_par <- list(infiles=list("raw_data/KMKG_19480101_19591231.csv","raw_data/KMKG_19600101_19891231.csv","raw_data/KMKG_19900101_20201204.csv"),
+                rowRange = list(c(9,86135),c(9,215644),c(9,271048)),
+                outfile="clean_data/KMKG_19480101_20201204_dp.rds")
+#mdw
+mdw_par <- list(infiles=list("raw_data/MDW_19480101_19591231.csv","raw_data/MDW_19600101_19891231.csv","raw_data/MDW_19900101_20201207.csv"),
+                rowRange = list(c(9,105186),c(9,259730),c(9,269147)),
+                outfile="clean_data/MDW_19480101_20201207_dp.rds")
+#mke
+mke_par <- list(infiles=list("raw_data/MKE_19480101_19591231.csv","raw_data/MKE_19600101_19891231.csv","raw_data/MKE_19900101_20201207.csv"),
+                rowRange = list(c(9+2376,107574-2376),c(9,233776),c(9,270397)),
+                outfile="clean_data/MKE_19471231_20201207_dp.rds")
+#tvc
+tvc_par <- list(infiles=list("raw_data/TVC_19490101_19591231.csv","raw_data/TVC_19600101_19891231.csv","raw_data/TVC_19900101_20201207.csv"),
+                rowRange = list(c(9+2376,99519-2376),c(9,213786),c(9,270396)),
+                outfile="clean_data/TVC_19481201_20201207_dp.rds")
+
+station_par_list <- list(beh=beh_par,grb=grb_par,kbiv=kbiv_par,kmkg=kmkg_par,mdw=mdw_par,mke=mke_par,tvc=tvc_par)
+```
+
+Finally we run the cleaning/preprocessing function on the list of stations.
+
+```{r}
+stat_data_list<-lapply(station_par_list,stat_clean_preproc)
+```
+
+We can refer to stations in the list by name.
+```{r}
+stat_data_list[["mdw"]]
+summary(stat_data_list[["mdw"]])
+```
