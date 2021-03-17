@@ -1,0 +1,136 @@
+---
+title: "Two proportion tests"
+author: "Brian Yurk"
+date: "3/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+require("knitr")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir=normalizePath("..")) #set working directory to the project directory
+```
+
+
+```{r}
+rm(list=ls())
+gc()
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+```
+
+
+```{r}
+#build contingency table
+con_tab <- function(data,cdir_stat,sysDir,dpthresh=1,lo=TRUE){
+  if(lo){
+    tib <- data %>% select(sTart = loDirStart,eNd = loDirEnd,dp=all_of(cdir_stat)) 
+  } else {
+    tib <- data %>% select(sTart = hiDirStart,eNd = hiDirEnd,dp=all_of(cdir_stat)) 
+  }
+  
+  tib <- tib %>% mutate( boolCDir = (dp >= dpthresh), boolSysDir =( (sTart == sysDir) | (eNd == sysDir) ) ) %>% 
+      select(-dp,-sTart,-eNd)
+  
+  #why are there still NA rows in this data set?
+  tib <- tib %>% drop_na() %>% group_by(boolCDir) %>% summarize(SysDirT = sum(boolSysDir),SysDirF = sum(!boolSysDir))
+  
+  if(tib$boolCDir[1]){
+    roLabs <- c(cdir_stat,paste0("not_",cdir_stat))
+  } else {
+    roLabs <- c(paste0("not_",cdir_stat),cdir_stat)
+  }
+  
+  coLabs <- c(as.character(sysDir),paste0("not_",sysDir))
+  
+  ct <- as.matrix(tib)[,2:3]
+  dimnames(ct) <- list(roLabs,coLabs)
+    
+  return(ct)
+}
+
+#run fisher exact test for direction and output proportions
+fisher_test_coast <- function(data,cdir_stat,sysDirs,dpthresh=1,lo=TRUE){
+  
+  #build a list contingency tables for the different system directions 
+  ct_list <- sysDirs %>%
+    map(~con_tab(data=data,cdir_stat=cdir_stat,sysDir=.x,dpthresh=dpthresh,lo=lo))
+  
+  #run fisher test on the contingency tables and output a vector of p values
+  p_vals <- ct_list %>% map_dbl(~fisher.test(.x)$p.value)
+  names(p_vals) <- as.character(sysDirs)
+  
+  #grepl is used to make sure that the proportion is the proportion 
+  #of successes rather than failures and to make sure that the rows 
+  #are orderd by coast, not coast
+  prop_df <- ct_list %>% map_dfc(~.x[1+grepl("not",rownames(.x)),!grepl("not", colnames(.x))]/rowSums(.x[1+grepl("not",rownames(.x)),]))
+  names(prop_df) <- as.character(sysDirs)
+  prop_df$cdir_stat <- c(cdir_stat,paste0("not_",cdir_stat))
+  
+  
+  return(list(p_vals=p_vals,prop_df=prop_df))
+}
+
+plot_props <- function(ftc){
+  prop_df <- ftc$prop_df
+  print(prop_df)
+  p_vals <- ftc$p_vals
+  print(p_vals)
+  prop_df_long <- prop_df %>%
+    pivot_longer(!cdir_stat,names_to="sysDir",values_to="proportion") #long format better for plotting
+
+  (p <- ggplot(data=prop_df_long,aes(x=reorder(sysDir,as.numeric(sysDir)),y=proportion,fill=cdir_stat)) +
+      geom_bar(stat="identity",color="black", position=position_dodge()) +
+      xlab("system center") +
+      theme_minimal() +
+      scale_fill_brewer(palette="Blues"))
+  
+  return(p)
+}
+
+```
+
+```{r}
+library(xlsx)
+data <- read.xlsx("raw_data/Table R-1.xlsx",sheetIndex=1,colIndex=1:22,rowIndex=1:84, header=TRUE,stringsAsFactors=FALSE)
+names(data)<-c("Event","tStart","tEnd","loDirStart","loDirEnd","hiDirStart","hiDirEnd","NC_na","NC_pi","NEC_na","EC_ho","EC_bs","SEC_mc","SEC_gt","SC_mc","SC_bh","SWC_ch","WC_ke","WC_mw","NWC_fa")
+
+cdir_stations <- c("NC_na","NC_pi","NEC_na","EC_ho","EC_bs","SEC_mc","SEC_gt","SC_mc","SC_bh","SWC_ch","WC_ke","WC_mw","NWC_fa")
+sysDirs <- seq(0,21,by=3)
+
+#example
+#ct <- con_tab(data,"EC_bs",0,lo=TRUE)
+#ft <- fisher.test(ct)
+#ft$p.value
+#props <- ct[,!grepl("not", colnames(ct))]/rowSums(ct)
+
+#example
+#ftc <- fisher_test_coast(data,"EC_bs",sysDirs,dpthresh=1,lo=TRUE)
+#prop_df <- ftc$prop_df
+#p_vals <- ftc$p_vals
+
+
+ftc <- fisher_test_coast(data,"EC_bs",sysDirs,dpthresh=1,lo=FALSE)
+ftc %>% plot_props()
+
+prop_df <- ftc$prop_df
+p_vals <- data.frame(ftc$p_vals)
+```
+
+
+```{r}
+#some code I could not get to work!
+# ast_fun<-function(bool){
+#   b<-rep(NA,length(bool))
+#   b[bool] <- "*"
+#   b[!bool] <- ""
+#   return(b)
+# }
+# 
+# pval_df <- tibble(p_vals) %>% mutate(sysDir=names(p_vals),sig=ast_fun(p_vals<0.05))
+# levs <- prop_df_long %>% group_by(sysDir) %>% summarize(proportion=max(proportion))
+# pval_df <- pval_df %>% full_join(levs,by=c("sysDir"="sysDir")) %>% select(-p_vals)
+#p + geom_text(data=pval_df, aes(label=sig,x=reorder(sysDir,as.numeric(sysDir)), y=proportion), color="black",position=position_dodge(), size=3.5)
+
+```
