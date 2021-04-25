@@ -56,7 +56,7 @@ Next we construct a function that will calculate drift potential per time, follo
 ```{r}
 dp_from_ws <- function(ws,ht=10){ #assumes ws units are miles per hour
   ws10 <- ws*log(200)/log(20*ht) #estimate speed at 10m
-  ws10kt <- ws*0.868976 #mph to knots
+  ws10kt <- ws10*0.868976 #mph to knots
   q <- ws10kt^2*(ws10kt-12) #threshold 12 knots as in Fryberger and Dean
   q <- q*(q>0) #dp should be zero if ws is below threshold
   return(q)

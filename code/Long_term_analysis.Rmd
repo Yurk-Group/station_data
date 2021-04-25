@@ -152,6 +152,28 @@ compute_rel_dp <- function(tib){ #Compute directional dps as proportion of total
     mutate(dir=factor(gsub(".*_","",dir),levels=levs))
   return(tib)
 }
+
+#regression analyses for dp vs yr
+lm_dp_vs_yr <- function(tib,start_yr=1961,with_plots=TRUE){ 
+  lm_dp_yr <- tib %>% select(yr,dpt2_su) %>% filter(yr>=start_yr) %>%
+    lm(dpt2_su ~ yr, data = .) %>% summary()
+  if(with_plots){
+    tib <- tib %>% select(yr,dpt2_su) %>% filter(yr>=start_yr)
+    p <- ggplot(data=tib, mapping=aes(x=yr,y=dpt2_su)) + geom_point() +
+      ylab('drift potential') + xlab('year') + 
+      geom_smooth(method='lm')
+    print(p)
+  }
+  return(lm_dp_yr)
+}
+
+#proportion change 1961-2019 based on linear model
+lm_pred_prop_change <- function(lmsummary){
+  m <- lmsummary$coefficients[2,1] #slope
+  b <- lmsummary$coefficients[1,1] #intercept
+  prop_change <- m*(2019-1961)/(b+m*1961)
+  return(prop_change)
+}
 ```
 
 Import dp data for each station, drop rows with NA wind speeds, compute time intervals, compute drift potentials (q*dt, calling it dpt, dp is drift potential per time). Drop partial years at the beginning and end of the data. 1988 is missing from the data at BEH. Make a list of data frames to streamline what would otherwise be repetitive function calls.
@@ -198,6 +220,14 @@ Plot the total drift potential for each year and for each station.
    xlab('year'))
 
 ggsave('outputs/dp_yearly.pdf')
+```
+Regression analysis for each station, using only years after 1960.
+
+```{r}
+lm_list <- station_list_yr %>% map(lm_dp_vs_yr,start_yr=1961,with_plots=TRUE)
+
+#proportion change over 1961-2019 using linear model
+prop_change_list <- lm_list %>% map(lm_pred_prop_change)
 ```
 
 Plot and save decadal Fryberger diagrams for 5 stations.
