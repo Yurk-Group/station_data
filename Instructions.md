@@ -44,5 +44,7 @@ Decadal totals were also computed for each of the above mentioned directions and
 
 The total yearly drift potential was plotted over time for the seven stations. Decadal Fryberger diagrams were plotted for 5 stations with longer data sets. These were scaled so that the resultant drift potential vector had the same length for each station. The relative proportion of drift potential from each of the 16 directions was also computed and plotted as stacked bar plots for each station. These show yearly variation in the directions of drift potential.
 
+Linear regression analysis was performed to determine if there was a linear relationship between total drift potential and year for each of the stations.
+
 2. Ed Hansen's table is analyzed in the 'two_props.Rmd' script. There are sometimes multiple stations for a single coast direction. For each coast direction-station pair events were identified as affecting the coast-station if drift potential exceeded 1 at that station from that coast direction. The 83 storms were classified as either affecting the coast-station or not, and the proportion of events with low pressure centers in each of 8 directions was compared between the two groups using a Fisher exact test for each direction. This was also done for high pressure centers. The code that is included here allows this analysis to be done for a single coast-station pair at a time. Ed Hansen ran this for each coast-station pair to produce figures in Excel.
 
