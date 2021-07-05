@@ -2,7 +2,9 @@
 title: "Long term station data analysis"
 author: "Brian Yurk"
 date: "12/4/2020"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -27,18 +29,23 @@ compute_durations <- function(tib){ #computes time elapsed between measurements 
   return(tib)
 }
 
-compute_dpt <- function(tib){ #computes drift potential from drift potential per time and time interval width
+#computes drift potential from drift potential per time and time interval width
+compute_dpt <- function(tib){ 
   tib <- tib %>% mutate(dpt = dp*dt)
   return(tib)
 }
 
-compute_dpt2 <- function(tib,dtmax=3){ #computes modified drift potentil by not allowing time intervals to exceed 3 hours. For those that do, the remainder of the time interval is recorded
+#computes modified drift potentil by not allowing time intervals to exceed 3 hours. 
+#For those that do, the remainder of the time interval is recorded
+compute_dpt2 <- function(tib,dtmax=3){ 
   tib <- tib %>% mutate(dpt2 = dp*pmin(dt,3),lost_dt = dt-pmin(dt,3))
   return(tib)
 }
 
-compute_dp_stuff <- function(tib,dtmax = 3){ #applies the previous functions after dropping na wind speeds
-  tib <- tib %>% drop_na(WS) %>% compute_durations() %>% compute_dpt() %>% compute_dpt2(dtmax)
+#applies the previous functions after dropping na wind speeds
+compute_dp_stuff <- function(tib,dtmax = 3){ 
+  tib <- tib %>% drop_na(WS) %>% compute_durations() %>%
+    compute_dpt() %>% compute_dpt2(dtmax)
   return(tib)
 }
 
@@ -47,11 +54,14 @@ drop_yrs <- function(tib,yrs){ #drops specified years from data
   return(tib)
 }
 
-compute_by_yr_stuff_directional <- function(tib){ #yearly totals: drift potential, by direction, by coast; lost time, number of observations, etc
-  tib <- tib %>% select(datetime,dt,dp,WD,dpt,dpt2,lost_dt) %>% mutate(yr = year(datetime)) %>%
-    group_by(yr) %>% 
+#yearly totals: drift potential, by direction, by coast; 
+#lost time, number of observations, etc
+compute_by_yr_stuff_directional <- function(tib){ 
+  tib <- tib %>% select(datetime,dt,dp,WD,dpt,dpt2,lost_dt) %>% 
+    mutate(yr = year(datetime)) %>% group_by(yr) %>% 
     summarize(dp_m = mean(dp,na.rm=TRUE),dt_m=mean(dt,na.rm=TRUE),dt_sd=sd(dt,na.rm=TRUE),
-              dpt_su=sum(dpt,na.rm=TRUE),dpt2_su=sum(dpt2,na.rm=TRUE),lost_dt_su=sum(lost_dt,na.rm=TRUE),
+              dpt_su=sum(dpt,na.rm=TRUE),dpt2_su=sum(dpt2,na.rm=TRUE),
+              lost_dt_su=sum(lost_dt,na.rm=TRUE),
               dp_n = sum(dpt2*(WD>=0)*(WD<11.25)+dpt2*(WD>=348.75)*(WD<=360),na.rm=TRUE),
               dp_nne = sum(dpt2*(WD>=11.25)*(WD<33.75),na.rm=TRUE),
               dp_ne = sum(dpt2*(WD>=33.75)*(WD<56.25),na.rm=TRUE),
@@ -80,14 +90,14 @@ compute_by_yr_stuff_directional <- function(tib){ #yearly totals: drift potentia
   return(tib)
 }
 
-
-drop_big_lost_dt_yrs<- function(tib,dtmax=175){ #drop years with more than 175 (default) hours of lost time
+#drop years with more than 175 (default) hours of lost time
+drop_big_lost_dt_yrs<- function(tib,dtmax=175){ 
   tib <- tib[tib$lost_dt_su<=dtmax,]
   return(tib)
 }
 
-
-group_by_yrs <- function(tib,breaks){ #a function to group the data by years - used for decadal computations
+#a function to group the data by years - used for decadal computations
+group_by_yrs <- function(tib,breaks){ 
   tib <- tib %>%
     mutate(num_yrs = 1) %>%
     group_by(gr=cut(yr,breaks=breaks,right=FALSE)) %>%
@@ -102,7 +112,8 @@ dp_plot <- function(dp,yscale=30){ #plot fryberger diagrams
   rndp <- sum(ndp) #north component of resultant dp
   redp <- sum(edp) #east component of resultant dp
   rdp <- sqrt(rndp^2+redp^2) #rdp magnitude
-  rdir <- (atan2(redp,rndp)*180/pi+180) %% 360 #rdp direction (rotated 180 to point where the sand is going)
+  #rdp direction (rotated 180 to point where the sand is going)
+  rdir <- (atan2(redp,rndp)*180/pi+180) %% 360 
   
   dp_df <- structure(list(dir = dir, dp = dp),.Names=c("dir", "dp"),
                      class="data.frame",row.names=c(NA,-16) )
@@ -110,9 +121,11 @@ dp_plot <- function(dp,yscale=30){ #plot fryberger diagrams
   rdp_df <- structure(list(dir = rdir, dp = rdp),.Names=c("dir", "dp"),
                       class="data.frame",row.names=c(17L) )
   
-  if(yscale=="RDP"){yscale <- 2.7e7*rdp_df[1,2]/13075309} #normalize by RDP - details are weird. Set to match scaling of an earlier plot
+  #normalize by RDP - details are weird. Set to match scaling of an earlier plot
+  if(yscale=="RDP"){yscale <- 2.7e7*rdp_df[1,2]/13075309} 
   
-  #Set ylim to be as large as needed for largest dp in set of diagrams being displayed together. Then we get consistent scaling
+  #Set ylim to be as large as needed for largest dp in set of diagrams being 
+  # displayed together. Then we get consistent scaling
   base <- ggplot(dp_df, aes(x=dir,y=dp))
   p <- base + coord_polar() + ylim(0,yscale) +
     scale_x_continuous(limits=c(0,360),breaks=dir)
@@ -130,8 +143,8 @@ dp_plot <- function(dp,yscale=30){ #plot fryberger diagrams
   return(q)
 }
 
-
-dp_plot_yrs <- function(tib,row,yscale=30,fname=NULL){ #plot and maybe save fryberger diagram for a particular row of the data
+#plot and maybe save fryberger diagram for a particular row of the data
+dp_plot_yrs <- function(tib,row,yscale=30,fname=NULL){ 
   st <- which(names(tib)=="dp_n")
   en <- which(names(tib)=="dp_nnw")
   dp <- as.numeric(tib[row,st:en])
@@ -143,9 +156,10 @@ dp_plot_yrs <- function(tib,row,yscale=30,fname=NULL){ #plot and maybe save fryb
   }
 }
 
-compute_rel_dp <- function(tib){ #Compute directional dps as proportion of total dp
-  #levs <- c("n","nne","ne","ene","e","ese","se","sse","s","ssw","sw","wsw","w","wnw","nw","nnw")
-  levs <- rev(c("e","ese","se","sse","s","ssw","sw","wsw","w","wnw","nw","nnw","n","nne","ne","ene"))
+#Compute directional dps as proportion of total dp
+compute_rel_dp <- function(tib){ 
+  levs <- rev(c("e","ese","se","sse","s","ssw","sw","wsw","w","wnw",
+                "nw","nnw","n","nne","ne","ene"))
   tib <- tib %>% mutate_at(vars(dp_n:dp_nnw),funs(./dpt2_su)) %>%
     select(station:dp_nnw) %>% select(-(dp_m:lost_dt_su)) %>%
     pivot_longer(!c(station,yr),names_to="dir",values_to="dp") %>%
@@ -179,13 +193,20 @@ lm_pred_prop_change <- function(lmsummary){
 Import dp data for each station, drop rows with NA wind speeds, compute time intervals, compute drift potentials (q*dt, calling it dpt, dp is drift potential per time). Drop partial years at the beginning and end of the data. 1988 is missing from the data at BEH. Make a list of data frames to streamline what would otherwise be repetitive function calls.
 
 ```{r}
-beh <- readRDS('clean_data/BEH_19730101_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1973,1988,2020))
-biv <- readRDS('clean_data/KBIV_19961231_20201203_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1996,2020))
-grb <- readRDS('clean_data/GRB_19490901_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1949,2020))
-mdw <- readRDS('clean_data/MDW_19480101_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(2020))
-mke <- readRDS('clean_data/MKE_19471231_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1947,2020))
-mkg <- readRDS('clean_data/KMKG_19480101_20201204_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(2020))
-tvc <- readRDS('clean_data/TVC_19481201_20201207_dp.rds') %>% compute_dp_stuff() %>% drop_yrs(c(1948,2020))
+beh <- readRDS('clean_data/BEH_19730101_20201207_dp.rds') %>% compute_dp_stuff() %>% 
+  drop_yrs(c(1973,1988,2020))
+biv <- readRDS('clean_data/KBIV_19961231_20201203_dp.rds') %>% compute_dp_stuff() %>% 
+  drop_yrs(c(1996,2020))
+grb <- readRDS('clean_data/GRB_19490901_20201207_dp.rds') %>% compute_dp_stuff() %>% 
+  drop_yrs(c(1949,2020))
+mdw <- readRDS('clean_data/MDW_19480101_20201207_dp.rds') %>% compute_dp_stuff() %>% 
+  drop_yrs(c(2020))
+mke <- readRDS('clean_data/MKE_19471231_20201207_dp.rds') %>% compute_dp_stuff() %>% 
+  drop_yrs(c(1947,2020))
+mkg <- readRDS('clean_data/KMKG_19480101_20201204_dp.rds') %>% compute_dp_stuff() %>% 
+  drop_yrs(c(2020))
+tvc <- readRDS('clean_data/TVC_19481201_20201207_dp.rds') %>% compute_dp_stuff() %>% 
+  drop_yrs(c(1948,2020))
 
 station_list <- list(beh=beh,biv=biv,grb=grb,mdw=mdw,mke=mke,mkg=mkg,tvc=tvc)
 ```
@@ -196,14 +217,16 @@ Compute yearly drift potentials, including by direction. The dpt2 variable compu
 lost_dt_max <- 175 #hrs
 station_list_yr <- station_list %>% map(compute_by_yr_stuff_directional) %>%
   map(drop_big_lost_dt_yrs,dtmax=lost_dt_max) #as a list of tibbles
-station_yr <- station_list_yr %>% bind_rows(.id='station') #as a single tibble (better for plotting)
+#as a single tibble (better for plotting)
+station_yr <- station_list_yr %>% bind_rows(.id='station') 
 ```
 
 Now create decadal summaries. When doing decadal summaries this way, it is important to be mindful of missing years introduced in the previous step. This is especially important if looking at decadal dp totals, for example. To make comparisons of amounts of drift potential fair this should be divided by the number of years retained in the decade. The number of years retained is located in the num_yrs column. We do not do this sort of comparison. Decades are 1948-1957, 1958-1967,..., 2008-2017.
 
 ```{r}
 breaks <- seq(1948,2018,by=10)
-station_list_dec <- station_list_yr %>% map(group_by_yrs,breaks=breaks) #as a list of tibbles
+#as a list of tibbles
+station_list_dec <- station_list_yr %>% map(group_by_yrs,breaks=breaks) 
 station_dec <- station_list_dec %>% bind_rows(.id='station') #as a single tibble
 
 stat_dec_numyrs <- station_dec %>% select(station,gr,num_yrs)
@@ -213,7 +236,8 @@ print(stat_dec_numyrs)
 Plot the total drift potential for each year and for each station.
 
 ```{r}
-(p <- ggplot(data = station_yr, aes(x = yr, y = dpt2_su, shape = station, color = station)) +
+(p <- ggplot(data = station_yr, 
+             aes(x = yr, y = dpt2_su, shape = station, color = station)) +
    geom_point() +
    scale_shape_manual(values=c(15,16,17,18,19,3,8)) +
    ylab('drift potential') +
@@ -237,13 +261,16 @@ fry_table_stations <- c("mkg","tvc","mke","grb","mdw")
 #yscales <- rep(2.7e7,5)
 yscales <- rep("RDP",5) #normalize to rdp
 ros <- 1:7
-yr_int_str <- c("1948_1957","1958_1967","1968_1977","1978_1987","1988_1997","1998_2007","2008_2017")
+yr_int_str <- c("1948_1957","1958_1967","1968_1977","1978_1987","1988_1997","1998_2007",
+                "2008_2017")
 
 
 for(i in seq_along(fry_table_stations)){ #loop over stations
   for(j in seq_along(ros)){ #loop over decades
-    fname <- paste0("outputs/",fry_table_stations[i],"_",yr_int_str[j],".pdf") #plots are saved as pdfs. These are the file names.
-    dp_plot_yrs(station_list_dec[[fry_table_stations[i]]],ros[j],yscale=yscales[i],fname=fname)
+    #plots are saved as pdfs. These are the file names.
+    fname <- paste0("outputs/",fry_table_stations[i],"_",yr_int_str[j],".pdf") 
+    dp_plot_yrs(station_list_dec[[fry_table_stations[i]]],ros[j],yscale=yscales[i],
+                fname=fname)
   }
 }
 ```

@@ -2,7 +2,9 @@
 title: "Two proportion tests"
 author: "Brian Yurk"
 date: "3/10/2021"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -31,10 +33,13 @@ con_tab <- function(data,cdir_stat,sysDir,dpthresh=1,lo=TRUE){
     tib <- data %>% select(sTart = hiDirStart,eNd = hiDirEnd,dp=all_of(cdir_stat)) 
   }
   
-  tib <- tib %>% mutate( boolCDir = (dp >= dpthresh), boolSysDir =( (sTart == sysDir) | (eNd == sysDir) ) ) %>% 
+  tib <- tib %>% mutate( boolCDir = (dp >= dpthresh),
+                         boolSysDir =( (sTart == sysDir) |
+                                         (eNd == sysDir) ) ) %>% 
       select(-dp,-sTart,-eNd)
   
-  tib <- tib %>% drop_na() %>% group_by(boolCDir) %>% summarize(SysDirT = sum(boolSysDir),SysDirF = sum(!boolSysDir))
+  tib <- tib %>% drop_na() %>% group_by(boolCDir) %>%
+    summarize(SysDirT = sum(boolSysDir),SysDirF = sum(!boolSysDir))
   
   if(tib$boolCDir[1]){
     roLabs <- c(cdir_stat,paste0("not_",cdir_stat))
@@ -64,7 +69,9 @@ fisher_test_coast <- function(data,cdir_stat,sysDirs,dpthresh=1,lo=TRUE){
   #grepl is used to make sure that the proportion is the proportion 
   #of successes rather than failures and to make sure that the rows 
   #are orderd by coast, not coast
-  prop_df <- ct_list %>% map_dfc(~.x[1+grepl("not",rownames(.x)),!grepl("not", colnames(.x))]/rowSums(.x[1+grepl("not",rownames(.x)),]))
+  prop_df <- ct_list %>% map_dfc(~.x[1+grepl("not",rownames(.x)),
+                                     !grepl("not",colnames(.x))]/
+                                   rowSums(.x[1+grepl("not",rownames(.x)),]))
   names(prop_df) <- as.character(sysDirs)
   prop_df$cdir_stat <- c(cdir_stat,paste0("not_",cdir_stat))
   
@@ -72,7 +79,8 @@ fisher_test_coast <- function(data,cdir_stat,sysDirs,dpthresh=1,lo=TRUE){
   return(list(p_vals=p_vals,prop_df=prop_df))
 }
 
-# given the output of fisher_test_coast, plot proportions of events in with system center in the given direction for the two groups
+# given the output of fisher_test_coast, plot proportions of events in with
+# system center in the given direction for the two groups
 plot_props <- function(ftc){
   prop_df <- ftc$prop_df
   print(prop_df)
@@ -81,7 +89,8 @@ plot_props <- function(ftc){
   prop_df_long <- prop_df %>%
     pivot_longer(!cdir_stat,names_to="sysDir",values_to="proportion") #long format better for plotting
 
-  (p <- ggplot(data=prop_df_long,aes(x=reorder(sysDir,as.numeric(sysDir)),y=proportion,fill=cdir_stat)) +
+  (p <- ggplot(data=prop_df_long,aes(x=reorder(sysDir,as.numeric(sysDir)),
+                                     y=proportion,fill=cdir_stat)) +
       geom_bar(stat="identity",color="black", position=position_dodge()) +
       xlab("system center") +
       theme_minimal() +
@@ -96,10 +105,14 @@ Import the data, run the test for a specified coast-station pair, and plot the p
 
 ```{r}
 library(xlsx)
-data <- read.xlsx("raw_data/Table R-1.xlsx",sheetIndex=1,colIndex=1:22,rowIndex=1:84, header=TRUE,stringsAsFactors=FALSE)
-names(data)<-c("Event","tStart","tEnd","loDirStart","loDirEnd","hiDirStart","hiDirEnd","NC_na","NC_pi","NEC_na","EC_ho","EC_bs","SEC_mc","SEC_gt","SC_mc","SC_bh","SWC_ch","WC_ke","WC_mw","NWC_fa")
+data <- read.xlsx("raw_data/Table R-1afinal.xlsx",sheetIndex=1,colIndex=1:22,rowIndex=1:84,
+                  header=TRUE,stringsAsFactors=FALSE)
+names(data)<-c("Event","tStart","tEnd","loDirStart","loDirEnd","hiDirStart",
+               "hiDirEnd","NC_na","NC_pi","NEC_na","EC_ho","EC_bs","SEC_mc",
+               "SEC_gt","SC_mc","SC_bh","SWC_ch","WC_ke","WC_mw","NWC_fa")
 
-cdir_stations <- c("NC_na","NC_pi","NEC_na","EC_ho","EC_bs","SEC_mc","SEC_gt","SC_mc","SC_bh","SWC_ch","WC_ke","WC_mw","NWC_fa")
+cdir_stations <- c("NC_na","NC_pi","NEC_na","EC_ho","EC_bs","SEC_mc","SEC_gt",
+                   "SC_mc","SC_bh","SWC_ch","WC_ke","WC_mw","NWC_fa")
 sysDirs <- seq(0,21,by=3)
 
 #example
@@ -114,7 +127,7 @@ sysDirs <- seq(0,21,by=3)
 #p_vals <- ftc$p_vals
 
 
-ftc <- fisher_test_coast(data,"EC_bs",sysDirs,dpthresh=1,lo=FALSE)
+ftc <- fisher_test_coast(data,"NC_pi",sysDirs,dpthresh=1,lo=TRUE)
 ftc %>% plot_props()
 
 prop_df <- ftc$prop_df
