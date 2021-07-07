@@ -219,6 +219,7 @@ station_list_yr <- station_list %>% map(compute_by_yr_stuff_directional) %>%
   map(drop_big_lost_dt_yrs,dtmax=lost_dt_max) #as a list of tibbles
 #as a single tibble (better for plotting)
 station_yr <- station_list_yr %>% bind_rows(.id='station') 
+station_yr %>% write_csv("clean_data/station_yr.csv")
 ```
 
 Now create decadal summaries. When doing decadal summaries this way, it is important to be mindful of missing years introduced in the previous step. This is especially important if looking at decadal dp totals, for example. To make comparisons of amounts of drift potential fair this should be divided by the number of years retained in the decade. The number of years retained is located in the num_yrs column. We do not do this sort of comparison. Decades are 1948-1957, 1958-1967,..., 2008-2017.

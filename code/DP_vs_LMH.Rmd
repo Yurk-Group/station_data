@@ -1,0 +1,69 @@
+---
+title: "DP vs LMH level"
+author: "Brian Yurk"
+date: "7/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+require("knitr")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir=normalizePath("..")) #set working directory to the project directory
+```
+
+```{r}
+rm(list=ls())
+gc()
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+```
+
+Lake level data are from here: https://www.lre.usace.army.mil/Missions/Great-Lakes-Information/Great-Lakes-Information-2/Water-Level-Data/ downloaded 7/5/2021.
+
+```{r}
+station_yr <- read_csv('clean_data/station_yr.csv')
+
+lake_levs <- read_csv("raw_data/GLHYD_data_metric.csv", skip = 12) %>%
+  rename(MH = 'Michigan-Huron') %>%
+  mutate(date = paste(month, year, sep = ",") %>% my())
+
+lake_levs_yr <- lake_levs %>% group_by(year) %>% summarize(MH = mean(MH))
+```
+
+
+```{r}
+ggplot(data = lake_levs, mapping = aes(x = date, y = MH)) +
+  geom_line()
+
+ggplot(data = lake_levs_yr, mapping = aes(x = year, y = MH)) +
+  geom_line()
+```
+
+
+```{r}
+station_yr <- station_yr %>% left_join(lake_levs_yr, by = c("yr" = "year"))
+```
+
+```{r}
+ggplot(data = station_yr %>% filter(yr >= 1960), mapping = aes(x = yr, y = dpt2_su, color = station)) +
+  geom_path()
+
+ggplot(data = station_yr %>% filter(yr >= 1960), mapping = aes(x = yr, y = MH)) +
+  geom_point()
+
+ggplot(data = station_yr %>% filter(yr >= 1960), mapping = aes(x = MH, y = dpt2_su, color = station)) +
+  geom_point() + geom_smooth(method = 'lm')
+
+
+```
+
+No apparent relationship between Lake MH level and drift potential.
+
+```{r}
+lm1 <- lm(dpt2_su ~ MH*station, data = station_yr)
+summary(lm1)
+
+lm2 <- lm(dpt2_su ~ MH*station, data = stat_yr)
+summary(lm2)
+```
