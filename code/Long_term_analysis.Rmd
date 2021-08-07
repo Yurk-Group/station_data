@@ -66,44 +66,6 @@ drop_yrs <- function(tib,yrs){ #drops specified years from data
 
 #yearly totals: drift potential, by direction, by coast; 
 #lost time, number of observations, etc
-#Note: units are not as Fryberger (VU). Instead they are 100*U*hr
-compute_by_yr_stuff_directional <- function(tib){ 
-  tib <- tib %>% select(datetime,dt,dp,WD,dpt,dpt2,lost_dt) %>% 
-    mutate(yr = year(datetime)) %>% group_by(yr) %>% 
-    summarize(dp_m = mean(dp,na.rm=TRUE),dt_m=mean(dt,na.rm=TRUE),dt_sd=sd(dt,na.rm=TRUE),
-              dpt_su=sum(dpt,na.rm=TRUE),dpt2_su=sum(dpt2,na.rm=TRUE),
-              lost_dt_su=sum(lost_dt,na.rm=TRUE),
-              dp_n = sum(dpt2*(WD>=0)*(WD<11.25)+dpt2*(WD>=348.75)*(WD<=360),na.rm=TRUE),
-              dp_nne = sum(dpt2*(WD>=11.25)*(WD<33.75),na.rm=TRUE),
-              dp_ne = sum(dpt2*(WD>=33.75)*(WD<56.25),na.rm=TRUE),
-              dp_ene = sum(dpt2*(WD>=56.25)*(WD<78.75),na.rm=TRUE),
-              dp_e = sum(dpt2*(WD>=78.75)*(WD<101.25),na.rm=TRUE),
-              dp_ese = sum(dpt2*(WD>=101.25)*(WD<123.75),na.rm=TRUE),
-              dp_se = sum(dpt2*(WD>=123.75)*(WD<146.25),na.rm=TRUE),
-              dp_sse = sum(dpt2*(WD>=146.25)*(WD<168.75),na.rm=TRUE),
-              dp_s = sum(dpt2*(WD>=168.75)*(WD<191.25),na.rm=TRUE),
-              dp_ssw = sum(dpt2*(WD>=191.25)*(WD<213.75),na.rm=TRUE),
-              dp_sw = sum(dpt2*(WD>=213.75)*(WD<236.25),na.rm=TRUE),
-              dp_wsw = sum(dpt2*(WD>=236.25)*(WD<258.75),na.rm=TRUE),
-              dp_w = sum(dpt2*(WD>=258.75)*(WD<281.25),na.rm=TRUE),
-              dp_wnw = sum(dpt2*(WD>=281.25)*(WD<303.75),na.rm=TRUE),
-              dp_nw = sum(dpt2*(WD>=303.75)*(WD<326.25),na.rm=TRUE),
-              dp_nnw = sum(dpt2*(WD>=326.25)*(WD<348.75),na.rm=TRUE),
-              dp_sc = sum(dpt2*(WD>=0)*(WD<=45)+dpt2*(WD>=315)*(WD<=360),na.rm=TRUE),
-              dp_swc = sum(dpt2*(WD>=0)*(WD<=90)+dpt2*(WD==360),na.rm=TRUE),
-              dp_wc = sum(dpt2*(WD>=45)*(WD<=135),na.rm=TRUE),
-              dp_nwc = sum(dpt2*(WD>=90)*(WD<=180),na.rm=TRUE),
-              dp_nc = sum(dpt2*(WD>=135)*(WD<=225),na.rm=TRUE),
-              dp_nec = sum(dpt2*(WD>=180)*(WD<=270),na.rm=TRUE),
-              dp_ec = sum(dpt2*(WD>=225)*(WD<=315),na.rm=TRUE),
-              dp_sec = sum(dpt2*(WD>=270)*(WD<=360)+dpt2*(WD==0),na.rm=TRUE),
-              nobs=n())
-  return(tib)
-}
-
-
-#yearly totals: drift potential, by direction, by coast; 
-#lost time, number of observations, etc
 #Note: units ARE as Fryberger (VU). Fryberger used dimensionless dt
 #(proportion of total time, in this case over the year). Fryberger describes using
 #time as percentage then divided by 100, so a proportion
@@ -157,15 +119,6 @@ drop_big_lost_dt_yrs<- function(tib,dtmax=175){
 }
 
 #a function to group the data by years - used for decadal computations
-group_by_yrs <- function(tib,breaks){ 
-  tib <- tib %>%
-    mutate(num_yrs = 1) %>%
-    group_by(gr=cut(yr,breaks=breaks,right=FALSE)) %>%
-    summarize_at(vars(dpt2_su:num_yrs),sum,na.rm=TRUE)
-  return(tib)
-}
-
-#a function to group the data by years - used for decadal computations
 group_by_yrs_vu <- function(tib,breaks){ 
   tib <- tib %>%
     mutate(num_yrs = 1) %>%
@@ -203,43 +156,6 @@ group_by_yrs_vu <- function(tib,breaks){
   return(tib)
 }
 
-# dp_plot <- function(dp,yscale=30){ #plot fryberger diagrams
-#   dir <- seq(0,360-22.5,by=22.5)
-#   ndp <- dp*cos(dir*pi/180) #north components of dp
-#   edp <- dp*sin(dir*pi/180) #east components of dp
-#   rndp <- sum(ndp) #north component of resultant dp
-#   redp <- sum(edp) #east component of resultant dp
-#   rdp <- sqrt(rndp^2+redp^2) #rdp magnitude
-#   #rdp direction (rotated 180 to point where the sand is going)
-#   rdir <- (atan2(redp,rndp)*180/pi+180) %% 360 
-#   
-#   dp_df <- structure(list(dir = dir, dp = dp),.Names=c("dir", "dp"),
-#                      class="data.frame",row.names=c(NA,-16) )
-#   
-#   rdp_df <- structure(list(dir = rdir, dp = rdp),.Names=c("dir", "dp"),
-#                       class="data.frame",row.names=c(17L) )
-#   
-#   #normalize by RDP - details are weird. Set to match scaling of an earlier plot
-#   if(yscale=="RDP"){yscale <- 2.7e7*rdp_df[1,2]/13075309} 
-#   
-#   #Set ylim to be as large as needed for largest dp in set of diagrams being 
-#   # displayed together. Then we get consistent scaling
-#   base <- ggplot(dp_df, aes(x=dir,y=dp))
-#   p <- base + coord_polar() + ylim(0,yscale) +
-#     scale_x_continuous(limits=c(0,360),breaks=dir)
-#   q <- p + geom_segment(data = dp_df , aes(y=0,xend=dir,yend=dp),col="black") +
-#     geom_segment(data = rdp_df , aes(y=0,xend=dir,yend=dp),
-#                  arrow=arrow(length=unit(0.3,"cm")),col="grey",size=1) +
-#     theme(axis.line=element_blank(),axis.text.x=element_blank(),
-#           axis.text.y=element_blank(),axis.ticks=element_blank(),
-#           axis.title.x=element_blank(),
-#           axis.title.y=element_blank(),legend.position="none",
-#           panel.background=element_blank(),panel.border=element_blank(),
-#           panel.grid.major=element_blank(),
-#           panel.grid.minor=element_blank(),plot.background=element_blank()) 
-#   #print(q)
-#   return(q)
-# }
 
 #expects vector of 16 directional drift potentials starting at N and ending at NNW, rdp, and rdd 
 dp_plot <- function(dp,rdp,rdd,yscale=30){ #plot fryberger diagrams
@@ -272,19 +188,6 @@ dp_plot <- function(dp,rdp,rdd,yscale=30){ #plot fryberger diagrams
   print(q)
   return(q)
 }
-
-# #plot and maybe save fryberger diagram for a particular row of the data
-# dp_plot_yrs <- function(tib,row,yscale=30,fname=NULL){ 
-#   st <- which(names(tib)=="dp_n")
-#   en <- which(names(tib)=="dp_nnw")
-#   dp <- as.numeric(tib[row,st:en])
-#   #print(dp)
-#   #print(str(dp))
-#   dp_plot(dp,yscale=yscale)
-#   if(!is.null(fname)){
-#     ggsave(fname,height = 3, width=3, units= "in")
-#   }
-# }
 
 #plot and maybe save fryberger diagram for a particular row of the data
 dp_plot_yrs <- function(tib,row,yscale=30,fname=NULL){ 
@@ -367,7 +270,7 @@ station_yr <- station_list_yr %>% bind_rows(.id='station')
 station_yr %>% write_csv("clean_data/station_yr_vu.csv")
 ```
 
-Now create decadal summaries. When doing decadal summaries this way, it is important to be mindful of missing years introduced in the previous step. This is especially important if looking at decadal dp totals, for example. To make comparisons of amounts of drift potential fair this should be divided by the number of years retained in the decade. The number of years retained is located in the num_yrs column. We do not do this sort of comparison. Decades are 1948-1957, 1958-1967,..., 2008-2017.
+Now create decadal summaries. Note that there may be missing years introduced in the previous step. The number of years retained is located in the num_yrs column. Decades are 1948-1957, 1958-1967,..., 2008-2017.
 
 ```{r}
 breaks <- seq(1948,2018,by=10)
@@ -404,7 +307,7 @@ lm_list <- station_list_yr %>% map(lm_dp_vs_yr,start_yr=1961,with_plots=TRUE)
 prop_change_list <- lm_list %>% map(lm_pred_prop_change)
 ```
 
-Just nicely formatted plots.
+Just nicely formatted plots with regression lines.
 
 ```{r}
 station_dp_yr <- station_yr %>% 
@@ -445,6 +348,7 @@ for(i in seq_along(fry_table_stations)){ #loop over stations
 }
 ```
 
+Calculate proportion of decadal DP from 4 coastal directions for each of 5 stations.
 
 ```{r}
 station_coast <- station_dec %>% 
@@ -466,6 +370,7 @@ station_coast_prop <- station_coast %>%
   mutate(station = recode(station, "grb" = "GRB", "mdw" = "MDW", "mke" = "MKE", "mkg" = "MKG","tvc" = "TVC" ))
 ```
 
+Plot coastal proportions.
 
 ```{r}
 #to make things consistent with annual dp plot
