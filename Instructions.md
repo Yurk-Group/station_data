@@ -8,7 +8,7 @@ There are two components to this project:
 
 I chose various airport weather stations near the shoreline. My goal was to find stations that represented different parts of the coast and had long data records (70+ years). I also chose some stations with shorter records.
 
-2. To examine the relationship between drift potential within 45 degrees of a coast direction (for example, west coast includes winds from the SW trhough NW) and the locations of system centers (e.g., centers of low and high pressure systems). The coast-oriented drift potentials were computed by Ed Hansen using weather stations near the shoreline, who also manually identified the locations of the system centers using weather maps. This was done for all the storms occuring in 2015 that were identified as significant potential aeolian transport events. Thse were events in which wind speed exceeded 6.2 m/s for at least 3 hours at several stations (among 11 stations total). Events with a wind direction shift of more than 90 degrees during the event were split into two parts. There were a total of 83 events.
+2. To examine the relationship between drift potential within 45 degrees of a coast direction (for example, west coast includes winds from the SW trhough NW) and the locations of system centers (e.g., centers of low and high pressure systems). The coast-oriented drift potentials were computed by Ed Hansen using weather stations near the shoreline, who also manually identified the locations of the system centers using weather maps. This was done for all the storms occurring in 2015 that were identified as significant potential aeolian transport events. These were events in which wind speed exceeded 6.2 m/s for at least 3 hours at several stations (among 11 stations total). Events with a wind direction shift of more than 90 degrees during the event were split into two parts. There were a total of 83 events.
 
 ## Data
 
@@ -30,21 +30,23 @@ Something I noticed with some of the stations (GRB, MKE, TVC, BEH) is that the d
 
 Cleaning steps included selecting the correct rows, labeling columns, and creating a column with measurement times (as time objects).
 
-The only preprocessing was calculating drift potential (per time) following Fryberger and Dean.
+The only preprocessing was calculating drift potential per time (Q) following Fryberger and Dean. This is called drift potential in the code.
 
 2. There was only minimal cleaning required for the second part of the project and this is done as part of the analysis script.
 
 ## Analyzing and visualizing the data
 
-1. I did some additional processing of the data and construct some plots in the 'Long_term_analysis.Rmd' file. There is variation in the length of time between measurements. In some years it even appears as if measurements are not made at night at some stations. Rather than assuming that the last wind measurement preceding a long period is representative for the entire period, I decided to limit the period to just the first three hours following the last wind measurement. The remaining time period is considered lost time, during which we have no applicable wind measurements. I kept track of the amount of time that is lost each year. In yearly calculations, years with more than 175 lost hours were removed from the calculations. Drift potential is computed by multiplying drift potential per time (computed in the 'Combine_Station.Rmd' script) by the amount of time until the next measurements (or three hours if that is smaller).
+1. I did some additional processing of the data and constructed some plots in the 'Long_term_analysis.Rmd' file. There is variation in the length of time between measurements. In some years it even appears as if measurements are not made at night at some stations. Rather than assuming that the last wind measurement preceding a long period is representative for the entire period, I decided to limit the period to just the first three hours following the last wind measurement. The remaining time period is considered lost time, during which we have no applicable wind measurements. I kept track of the amount of time that is lost each year. In yearly calculations, years with more than 175 lost hours were removed from the calculations. Drift potential is computed by multiplying drift potential per time (computed in the 'Combine_Station.Rmd' script) by the amount of time until the next measurements (or three hours if that is smaller).
 
-For each station, drift potentials were totaled over each year (without too much lost time). Drift potentials were also totaled by direction for 16 directions (N, NNE, ENE, E, ..., NNW). These are useful for creating Fryberger diagrams. 'Coast' drift potentials were also computed for 8 directions. These represent wind directions within 45 degrees of the central 'coast' direction.
+For each station, drift potentials were totaled over each year (without too much lost time). Drift potentials were also totaled by direction for 16 directions (N, NNE, ENE, E, ..., NNW). These are useful for creating Fryberger drift roses. 'Coast' drift potentials were also computed for 8 directions. These represent wind directions within 45 degrees of the central 'coast' direction.
 
-Decadal totals were also computed for each of the above mentioned directions and over all.
+Decadal totals were also computed for each of the above mentioned directions and over all. Resultant drift potentials were also computed.
 
-The total yearly drift potential was plotted over time for the seven stations. Decadal Fryberger diagrams were plotted for 5 stations with longer data sets. These were scaled so that the resultant drift potential vector had the same length for each station. The relative proportion of drift potential from each of the 16 directions was also computed and plotted as stacked bar plots for each station. These show yearly variation in the directions of drift potential.
+The total yearly drift potential was plotted over time for the seven stations. Decadal Fryberger diagrams were plotted for 5 stations with longer data sets. These were scaled so that the resultant drift potential vector had the same length for each station.
 
 Linear regression analysis was performed to determine if there was a linear relationship between total drift potential and year for each of the stations.
+
+The proportion of drift potential that is accounted for by winds corresponding to each of the 4 cardinal coast directions are plotted for each direction. These calculations were done on a decadal basis. 
 
 2. Ed Hansen's table is analyzed in the 'two_props.Rmd' script. There are sometimes multiple stations for a single coast direction. For each coast direction-station pair events were identified as affecting the coast-station if drift potential exceeded 1 at that station from that coast direction. The 83 storms were classified as either affecting the coast-station or not, and the proportion of events with low pressure centers in each of 8 directions was compared between the two groups using a Fisher exact test for each direction. This was also done for high pressure centers. The code that is included here allows this analysis to be done for a single coast-station pair at a time. Ed Hansen ran this for each coast-station pair to produce figures in Excel.
 

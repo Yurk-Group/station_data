@@ -45,6 +45,7 @@ compute_dpt2 <- function(tib,dtmax=3){
   return(tib)
 }
 
+#compute northerly and easterly components of the wind vector
 compute_dpt2_rec_comp <- function(tib){
   tib <- tib %>% mutate(dpt2_n_comp = dpt2*cos(WD*pi/180), dpt2_e_comp = dpt2*sin(WD*pi/180))
   return(tib)
